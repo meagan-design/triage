@@ -930,8 +930,7 @@ body {
   letter-spacing: 0.02em;
 }
 .stage--in-progress { background: #ede8f5; color: #5c4880; }
-.stage--ready       { background: #edf4ef; color: #386845; }
-.stage--waiting     { background: #f7efeb; color: #9a6b5c; }
+.stage--pending     { background: #f5f0ea; color: #7a5a38; }
 .stage--blocked     { background: #f5eaea; color: #a04040; }
 .stage--done        { background: #eef5f0; color: #4a7a5c; }
 

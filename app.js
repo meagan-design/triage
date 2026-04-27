@@ -65,7 +65,7 @@
       desc: 'Finalized — ready to send, present, publish, or hand off' },
   ];
 
-  const STAGES = ['Unclear', 'In progress', 'Ready', 'Blocked', 'Done'];
+  const STAGES = ['Unclear', 'In progress', 'Pending', 'Blocked', 'Done'];
 
   /* ----------------------------------------------------------
      CLICKUP STATUS MAP
@@ -258,6 +258,7 @@
       if (item.lane === 'open-loops') item.lane = 'needs-placement';
       if (['communicate', 'move-forward'].includes(item.workMode)) item.workMode = null;
       if (item.stage === 'Waiting') item.stage = 'Blocked';
+      if (item.stage === 'Ready')   item.stage = 'Pending';
     });
   }
 
@@ -1038,7 +1039,7 @@
     if (!stage || stage === 'Unclear') return '';
     const cls = {
       'In progress': 'stage--in-progress',
-      'Ready':       'stage--ready',
+      'Pending':     'stage--pending',
       'Blocked':     'stage--blocked',
       'Done':        'stage--done',
     }[stage] || '';
