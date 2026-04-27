@@ -1028,11 +1028,19 @@
     }, ms);
   }
 
+  const WORK_MODE_ICONS = {
+    'figure-out': `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6.5" cy="6.5" r="4"/><line x1="9.5" y1="9.5" x2="13.8" y2="13.8"/></svg>`,
+    'collaborate': `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="5" r="2"/><circle cx="10.5" cy="5" r="2"/><path d="M2 13.5 C2 10.8, 3.5 9.2, 5.5 9.2 C 7.5 9.2, 9 10.8, 9 13.5"/><path d="M7 13.5 C7 10.8, 8.5 9.2, 10.5 9.2 C 12.5 9.2, 14 10.8, 14 13.5"/></svg>`,
+    'review': `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 8 C3 4.5, 5.5 2.5, 8 2.5 C10.5 2.5, 13 4.5, 14.5 8 C13 11.5, 10.5 13.5, 8 13.5 C5.5 13.5, 3 11.5, 1.5 8 Z"/><circle cx="8" cy="8" r="2"/></svg>`,
+    'ready-to-launch': `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 1.5 L 1.5 7 L 7 9 L 9 14.5 Z"/><line x1="14.5" y1="1.5" x2="7" y2="9"/></svg>`,
+  };
+
   function workModeBadge(mode) {
     if (!mode) return '';
     const wm = WORK_MODES.find(w => w.id === mode);
     if (!wm) return '';
-    return `<span class="work-mode-badge wm--${escapeHtml(mode)}" title="${escapeHtml(wm.label)}">${escapeHtml(wm.abbr)}</span>`;
+    const icon = WORK_MODE_ICONS[mode] || '';
+    return `<span class="work-mode-badge wm--${escapeHtml(mode)}" title="${escapeHtml(wm.desc || wm.label)}">${icon}<span class="work-mode-label">${escapeHtml(wm.label)}</span></span>`;
   }
 
   function stagePillHtml(stage) {

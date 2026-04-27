@@ -905,20 +905,34 @@ body {
   white-space: nowrap;
 }
 
-/* Work Mode Badge — warmer palette */
+/* Work Mode Badge — icon + label, subtle tint, four modes only */
 .work-mode-badge {
-  font-size: 0.6rem;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 9px 3px 7px;
+  border-radius: 12px;
+  letter-spacing: 0.005em;
   white-space: nowrap;
+  border: 1px solid transparent;
+  line-height: 1.1;
 }
-.wm--figure-out   { background: #f0ecf6; color: #5c4880; }
-.wm--move-forward { background: #edf4ef; color: #386845; }
-.wm--communicate  { background: #f6edf2; color: #824858; }
-.wm--review       { background: #f5f0ea; color: #7a5a38; }
-.wm--collaborate  { background: #eef0f8; color: #3a4a6c; }
+.work-mode-badge svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  display: block;
+}
+.work-mode-label {
+  font-weight: 600;
+}
+
+.wm--figure-out      { background: #f0ecf6; color: #5c4880; border-color: #e3dceb; }
+.wm--collaborate     { background: #eef0f8; color: #3a4a6c; border-color: #dde2ed; }
+.wm--review          { background: #f5f0ea; color: #7a5a38; border-color: #ebe1d4; }
+.wm--ready-to-launch { background: #edf4ef; color: #386845; border-color: #d8e6dc; }
 
 /* Stage Pill — warmer palette */
 .stage-pill {
@@ -1894,7 +1908,3 @@ body.app-locked #main-content { visibility: hidden; }
 .btn-delete { color: #c0614a; border-color: #e8c4bc; }
 .btn-delete:hover { background: #fdf0ee; }
 
-/* ============================================================
-   WORK MODE — Ready to Launch
-   ============================================================ */
-.wm--ready-to-launch { background: #eef5f0; color: #386845; }
