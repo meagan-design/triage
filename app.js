@@ -16,8 +16,8 @@
      Fill these in after creating your Supabase project.
      See setup instructions in the README.
   ---------------------------------------------------------- */
-  const SUPABASE_URL      = 'REPLACE_WITH_YOUR_SUPABASE_URL';
-  const SUPABASE_ANON_KEY = 'REPLACE_WITH_YOUR_SUPABASE_ANON_KEY';
+  const SUPABASE_URL      = 'https://dasmczehszbimiserntk.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhc21jemVoc3piaW1pc2VybnRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMTEyNTUsImV4cCI6MjA5Mjg4NzI1NX0.DBjEeN0Yt0OeJ144r5Wp3QMWliX2aG4n8H8yGa7Q-8I';
 
   /* ----------------------------------------------------------
      PASSWORD GATE
