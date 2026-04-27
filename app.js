@@ -33,8 +33,8 @@
     { id: 'this-week',       label: 'This Week' },
     { id: 'this-month',      label: 'This Month' },
     { id: 'strategic-radar', label: 'Strategic Radar' },
-    { id: 'open-loops',      label: 'Open Loops' },
     { id: 'waiting',         label: 'Waiting / Blocked' },
+    { id: 'tabled-items',    label: 'Tabled Items' },
   ];
 
   const INITIATIVES = [
@@ -55,44 +55,41 @@
   const DEFAULT_TABLED = ['Better Websites'];
 
   const WORK_MODES = [
-    { id: 'figure-out',   label: 'Figure out',   abbr: 'FO',
+    { id: 'figure-out',      label: 'Figure Out',      abbr: 'FO',
       desc: 'Unclear ask or path — dive in and make sense of it' },
-    { id: 'move-forward', label: 'Move forward', abbr: 'MF',
-      desc: 'Straightforward progress on a known item' },
-    { id: 'communicate',  label: 'Communicate',  abbr: 'CM',
-      desc: 'Send, present, explain, launch, hand off, or have a key conversation' },
-    { id: 'review',       label: 'Review',       abbr: 'RV',
-      desc: 'Read, assess, redline, QA, validate, or pressure-test' },
-    { id: 'collaborate',  label: 'Collaborate',  abbr: 'CL',
+    { id: 'collaborate',     label: 'Collaborate',     abbr: 'CL',
       desc: 'Working through something with others — alignment or shared progress' },
+    { id: 'review',          label: 'Review',          abbr: 'RV',
+      desc: 'Read, assess, redline, QA, validate, or pressure-test' },
+    { id: 'ready-to-launch', label: 'Ready to Launch', abbr: 'RL',
+      desc: 'Finalized — ready to send, present, publish, or hand off' },
   ];
 
-  const STAGES = ['Unclear', 'In progress', 'Ready', 'Waiting', 'Blocked', 'Done'];
+  const STAGES = ['Unclear', 'In progress', 'Ready', 'Blocked', 'Done'];
 
   /* ----------------------------------------------------------
      CLICKUP STATUS MAP
      Keys are lowercase (matching is case-insensitive).
   ---------------------------------------------------------- */
   const CLICKUP_STATUS_MAP = {
-    'doing':        { lane: 'this-week',       weekRelevance: 'this-week', displayGroup: 'Imported — In Progress', itemStage: 'In progress' },
-    'in progress':  { lane: 'this-week',       weekRelevance: 'this-week', displayGroup: 'Imported — In Progress', itemStage: 'In progress' },
-    'in-progress':  { lane: 'this-week',       weekRelevance: 'this-week', displayGroup: 'Imported — In Progress', itemStage: 'In progress' },
-    'to do':        { lane: 'needs-placement', weekRelevance: 'unclear',   displayGroup: 'Imported — To Do',       itemStage: 'Unclear'     },
-    'todo':         { lane: 'needs-placement', weekRelevance: 'unclear',   displayGroup: 'Imported — To Do',       itemStage: 'Unclear'     },
-    'open':         { lane: 'needs-placement', weekRelevance: 'unclear',   displayGroup: 'Imported — To Do',       itemStage: 'Unclear'     },
-    'not started':  { lane: 'needs-placement', weekRelevance: 'unclear',   displayGroup: 'Imported — To Do',       itemStage: 'Unclear'     },
-    'blocked':      { lane: 'waiting',         weekRelevance: 'unclear',   displayGroup: 'Imported — Blocked',     itemStage: 'Blocked'     },
-    'on hold':      { lane: 'waiting',         weekRelevance: 'unclear',   displayGroup: 'Imported — Blocked',     itemStage: 'Waiting'     },
-    'complete':     { lane: 'needs-placement', weekRelevance: 'unclear',   displayGroup: null,                     itemStage: 'Done'        },
-    'completed':    { lane: 'needs-placement', weekRelevance: 'unclear',   displayGroup: null,                     itemStage: 'Done'        },
-    'done':         { lane: 'needs-placement', weekRelevance: 'unclear',   displayGroup: null,                     itemStage: 'Done'        },
-    'closed':       { lane: 'needs-placement', weekRelevance: 'unclear',   displayGroup: null,                     itemStage: 'Done'        },
-    'review':       { lane: 'this-week',       weekRelevance: 'this-week', displayGroup: 'Imported — In Progress', itemStage: 'In progress' },
+    'doing':        { lane: 'this-week',       displayGroup: 'Imported — In Progress', itemStage: 'In progress' },
+    'in progress':  { lane: 'this-week',       displayGroup: 'Imported — In Progress', itemStage: 'In progress' },
+    'in-progress':  { lane: 'this-week',       displayGroup: 'Imported — In Progress', itemStage: 'In progress' },
+    'to do':        { lane: 'needs-placement', displayGroup: 'Imported — To Do',       itemStage: 'Unclear'     },
+    'todo':         { lane: 'needs-placement', displayGroup: 'Imported — To Do',       itemStage: 'Unclear'     },
+    'open':         { lane: 'needs-placement', displayGroup: 'Imported — To Do',       itemStage: 'Unclear'     },
+    'not started':  { lane: 'needs-placement', displayGroup: 'Imported — To Do',       itemStage: 'Unclear'     },
+    'blocked':      { lane: 'waiting',         displayGroup: 'Imported — Blocked',     itemStage: 'Blocked'     },
+    'on hold':      { lane: 'waiting',         displayGroup: 'Imported — Blocked',     itemStage: 'Blocked'     },
+    'complete':     { lane: 'needs-placement', displayGroup: null,                     itemStage: 'Done'        },
+    'completed':    { lane: 'needs-placement', displayGroup: null,                     itemStage: 'Done'        },
+    'done':         { lane: 'needs-placement', displayGroup: null,                     itemStage: 'Done'        },
+    'closed':       { lane: 'needs-placement', displayGroup: null,                     itemStage: 'Done'        },
+    'review':       { lane: 'this-week',       displayGroup: 'Imported — In Progress', itemStage: 'In progress' },
   };
 
   const CLICKUP_STATUS_DEFAULT = {
-    lane: 'needs-placement', weekRelevance: 'unclear',
-    displayGroup: 'Imported — To Do', itemStage: 'Unclear',
+    lane: 'needs-placement', displayGroup: 'Imported — To Do', itemStage: 'Unclear',
   };
 
   const TODAY_MAX = 5;
@@ -106,6 +103,7 @@
     tabledInitiatives:    [],
     completedInitiatives: [],
     deletedInitiatives:   [],
+    customInitiatives:    [],
     filter:               { initiative: null },
     completedFilter:      { initiative: null, period: 'all' },
     activeItemId:         null,
@@ -202,6 +200,7 @@
       tabledInitiatives:    state.tabledInitiatives,
       completedInitiatives: state.completedInitiatives,
       deletedInitiatives:   state.deletedInitiatives,
+      customInitiatives:    state.customInitiatives,
     };
   }
 
@@ -210,6 +209,7 @@
     state.tabledInitiatives    = data.tabledInitiatives    || [];
     state.completedInitiatives = data.completedInitiatives || [];
     state.deletedInitiatives   = data.deletedInitiatives   || [];
+    state.customInitiatives    = data.customInitiatives    || [];
   }
 
   function saveState() {
@@ -252,6 +252,13 @@
       state.tabledInitiatives = DEFAULT_TABLED.slice();
       saveState();
     }
+
+    // 4. Run migrations
+    state.items.forEach(item => {
+      if (item.lane === 'open-loops') item.lane = 'needs-placement';
+      if (['communicate', 'move-forward'].includes(item.workMode)) item.workMode = null;
+      if (item.stage === 'Waiting') item.stage = 'Blocked';
+    });
   }
 
   // Migrate a v1 item to v2 schema
@@ -344,10 +351,8 @@
       clickupList:     null,
       displayGroup:    null,
       lane:            'inbox',
-      weekRelevance:   'unclear',
       workMode:        null,
       stage:           'Unclear',
-      openLoop:        false,
       dueDate:         null,
       notes:           '',
       nextStep:        '',
@@ -360,6 +365,21 @@
     };
   }
 
+  function getAllInitiatives() {
+    const base   = INITIATIVES.filter(i => !state.deletedInitiatives.includes(i));
+    const custom = (state.customInitiatives || []).filter(i =>
+      !INITIATIVES.includes(i) && !state.deletedInitiatives.includes(i)
+    );
+    return [...base, ...custom.sort()];
+  }
+
+  function getActiveInitiatives() {
+    return getAllInitiatives().filter(i =>
+      !state.tabledInitiatives.includes(i) &&
+      !state.completedInitiatives.includes(i)
+    );
+  }
+
   function updateItem(id, changes) {
     const idx = state.items.findIndex(i => i.id === id);
     if (idx === -1) return;
@@ -370,9 +390,44 @@
 
   function moveItem(id, targetLane) {
     const changes = { lane: targetLane };
-    if (targetLane === 'waiting')    changes.stage    = 'Waiting';
-    if (targetLane === 'open-loops') changes.openLoop = true;
+    if (targetLane === 'waiting') changes.stage = 'Blocked';
     updateItem(id, changes);
+  }
+
+  function tableItem(id) {
+    updateItem(id, { lane: 'tabled-items' });
+    showToast('Item tabled');
+  }
+
+  function reactivateItem(id) {
+    updateItem(id, { lane: 'needs-placement' });
+    showToast('Item moved to Needs Placement');
+  }
+
+  function deleteItem(id) {
+    if (!confirm('Delete this item? This cannot be undone.')) return;
+    state.items = state.items.filter(i => i.id !== id);
+    if (state.activeItemId === id) state.activeItemId = null;
+    saveState();
+    render();
+    showToast('Item deleted');
+  }
+
+  function archiveItem(id) {
+    updateItem(id, { archived: true, lane: 'archived' });
+    showToast('Item archived');
+  }
+
+  function unarchiveItem(id) {
+    updateItem(id, { archived: false, lane: 'needs-placement' });
+    showToast('Item moved to Needs Placement');
+  }
+
+  function addCustomInitiative(name) {
+    if (!state.customInitiatives.includes(name) && !INITIATIVES.includes(name)) {
+      state.customInitiatives.push(name);
+      saveState();
+    }
   }
 
   function markDone(id) {
@@ -439,6 +494,7 @@
 
   /* Active visibility: items that should appear in regular lanes */
   function isActiveVisible(item) {
+    if (item.archived) return false;
     if (item.stage === 'Done') return false;
     if (item.initiative) {
       if (state.tabledInitiatives.includes(item.initiative))    return false;
@@ -983,7 +1039,6 @@
     const cls = {
       'In progress': 'stage--in-progress',
       'Ready':       'stage--ready',
-      'Waiting':     'stage--waiting',
       'Blocked':     'stage--blocked',
       'Done':        'stage--done',
     }[stage] || '';
@@ -1016,8 +1071,6 @@
       'card',
       tabled                              ? 'card--tabled'      : '',
       completed                           ? 'card--completed'   : '',
-      !tabled && !completed && item.openLoop && !isDone ? 'card--open-loop'   : '',
-      !tabled && !completed && item.stage === 'Waiting' && !isDone ? 'card--waiting'     : '',
       !tabled && !completed && item.stage === 'Blocked' && !isDone ? 'card--blocked'     : '',
       !tabled && !completed && isInProgress && !isDone  ? 'card--in-progress' : '',
       isDone                              ? 'card--done'        : '',
@@ -1028,9 +1081,10 @@
       : '';
 
     return `
-      <article class="${cardCls}" data-id="${escapeHtml(item.id)}">
+      <article class="${cardCls}" data-id="${escapeHtml(item.id)}" draggable="true">
         <div class="card-main" role="button" tabindex="0" aria-expanded="${isExpanded}">
           <div class="card-header-row">
+            <span class="drag-handle" title="Drag to reorder">&#x2807;</span>
             ${item.source === 'clickup' ? '<span class="source-badge">CU</span>' : ''}
             <h4 class="card-title">${escapeHtml(item.title)}</h4>
           </div>
@@ -1051,6 +1105,11 @@
           ${!isDone
             ? `<button class="btn-done" data-id="${escapeHtml(item.id)}" data-action="done">Done</button>`
             : ''}
+          ${item.archived
+            ? `<button class="btn-reactivate" data-id="${escapeHtml(item.id)}" data-action="unarchive">Unarchive</button>`
+            : item.lane === 'tabled-items'
+              ? `<button class="btn-reactivate" data-id="${escapeHtml(item.id)}" data-action="reactivate">Reactivate</button>`
+              : `<button class="btn-table" data-id="${escapeHtml(item.id)}" data-action="table">Table</button>`}
         </div>
         ${isExpanded ? renderCardDetail(item) : ''}
       </article>`;
@@ -1093,7 +1152,17 @@
       fields.push({ label: 'Waiting On', valueHtml: waitHtml });
     }
 
-    if (!fields.length) return '';
+    const dangerHtml = `
+      <div class="card-danger-actions">
+        ${item.archived
+          ? `<button class="btn-archive" data-id="${escapeHtml(item.id)}" data-action="unarchive">Unarchive</button>`
+          : `<button class="btn-archive" data-id="${escapeHtml(item.id)}" data-action="archive">Archive</button>`}
+        <button class="btn-delete" data-id="${escapeHtml(item.id)}" data-action="delete">Delete</button>
+      </div>`;
+
+    if (!fields.length) {
+      return `<div class="card-detail">${dangerHtml}</div>`;
+    }
 
     return `
       <div class="card-detail">
@@ -1102,6 +1171,7 @@
             <div class="card-detail-label">${escapeHtml(f.label)}</div>
             <div class="card-detail-value">${f.valueHtml}</div>
           </div>`).join('')}
+        ${dangerHtml}
       </div>`;
   }
 
@@ -1110,8 +1180,13 @@
   ========================================================== */
 
   function render() {
+    closeMovePopover();
+    closeInitiativeActionPopover();
     renderSidebar();
     LANES.forEach(lane => renderLane(lane.id));
+    renderOverdueLane();
+    renderTabledItemsLane();
+    renderArchivedLane();
     renderTabledInitiatives();
     renderCompletedInitiatives();
     renderCompletedItems();
@@ -1206,14 +1281,52 @@
       </div>`;
   }
 
+  function renderOverdueLane() {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const items = state.items.filter(i =>
+      i.dueDate &&
+      new Date(i.dueDate + 'T00:00:00') < today &&
+      i.stage !== 'Done' &&
+      !i.archived &&
+      i.lane !== 'tabled-items'
+    );
+    updateLaneMeta('overdue', items.length);
+    const container = document.getElementById('cards-overdue');
+    if (!container) return;
+    container.innerHTML = items.length
+      ? items.map(i => renderCard(i)).join('')
+      : '<p class="lane-empty">No overdue items</p>';
+  }
+
+  function renderTabledItemsLane() {
+    const container = document.getElementById('cards-tabled-items');
+    if (!container) return;
+    const items = state.items.filter(i => i.lane === 'tabled-items' && !i.archived);
+    updateLaneMeta('tabled-items', items.length);
+    container.innerHTML = items.length
+      ? items.map(i => renderCard(i)).join('')
+      : '<p class="lane-empty">No tabled items</p>';
+  }
+
+  function renderArchivedLane() {
+    const section   = document.getElementById('archived-items');
+    const container = document.getElementById('cards-archived-items');
+    const countEl   = document.getElementById('count-archived-items');
+    if (!container) return;
+    const items = state.items.filter(i => i.archived);
+    if (section) section.hidden = items.length === 0;
+    if (countEl) countEl.textContent = items.length > 0 ? items.length : '';
+    container.innerHTML = items.length
+      ? items.map(i => renderCard(i)).join('')
+      : '<p class="lane-empty">No archived items</p>';
+  }
+
   function renderStrategicRadar() {
     const container = document.getElementById('cards-strategic-radar');
     if (!container) return;
 
     // Only show non-tabled, non-completed initiatives in radar
-    const activeInits = INITIATIVES.filter(i =>
-      !state.tabledInitiatives.includes(i) && !state.completedInitiatives.includes(i)
-    );
+    const activeInits = getActiveInitiatives();
     const items   = getItemsForLane('strategic-radar');
     updateLaneMeta('strategic-radar', items.length);
 
@@ -1385,11 +1498,7 @@
     // Active initiatives
     const list = document.getElementById('initiative-list');
     if (list) {
-      const activeInits = INITIATIVES.filter(i =>
-        !state.tabledInitiatives.includes(i) &&
-        !state.completedInitiatives.includes(i) &&
-        !state.deletedInitiatives.includes(i)
-      );
+      const activeInits = getActiveInitiatives();
       list.innerHTML = activeInits.map(init => {
         const count  = state.items.filter(i => i.initiative === init && isActiveVisible(i)).length;
         const active = state.filter.initiative === init;
@@ -1464,8 +1573,11 @@
     const all            = state.items.filter(isReviewable);
     const completedWeek  = all.filter(i => i.stage === 'Done' && (i.completedAt || i.updatedAt) >= weekStart);
     const active         = all.filter(i => isActiveVisible(i));
-    const waiting        = all.filter(i => (i.stage === 'Waiting' || i.stage === 'Blocked') && i.stage !== 'Done');
-    const openLoops      = all.filter(i => i.openLoop && i.stage !== 'Done');
+    const blocked        = all.filter(i => i.stage === 'Blocked');
+    const today          = new Date(); today.setHours(0,0,0,0);
+    const overdue        = active.filter(i =>
+      i.dueDate && new Date(i.dueDate + 'T00:00:00') < today
+    );
     const needsPlacement = all.filter(i => i.lane === 'needs-placement' && i.stage !== 'Done');
 
     summaryEl.innerHTML = `
@@ -1478,12 +1590,12 @@
         <div class="review-stat-value">${active.length}</div>
       </div>
       <div class="review-stat-card">
-        <div class="review-stat-label">Waiting / Blocked</div>
-        <div class="review-stat-value waiting">${waiting.length}</div>
+        <div class="review-stat-label">Blocked</div>
+        <div class="review-stat-value waiting">${blocked.length}</div>
       </div>
       <div class="review-stat-card">
-        <div class="review-stat-label">Open Loops</div>
-        <div class="review-stat-value open-loops">${openLoops.length}</div>
+        <div class="review-stat-label">Overdue</div>
+        <div class="review-stat-value waiting">${overdue.length}</div>
       </div>
       <div class="review-stat-card">
         <div class="review-stat-label">Needs Placement</div>
@@ -1498,11 +1610,11 @@
   function populateFormSelects() {
     const initSel = document.getElementById('form-initiative');
     if (initSel) {
-      const activeInits = INITIATIVES.filter(i =>
-        !state.deletedInitiatives.includes(i)
-      );
+      const prevValue = initSel.value;
       initSel.innerHTML = `<option value="">— Unassigned —</option>` +
-        activeInits.map(i => `<option value="${escapeHtml(i)}">${escapeHtml(i)}</option>`).join('');
+        getAllInitiatives()
+          .map(i => `<option value="${escapeHtml(i)}">${escapeHtml(i)}</option>`).join('');
+      if (prevValue) initSel.value = prevValue;
     }
     const laneSel = document.getElementById('form-lane');
     if (laneSel) {
@@ -1528,17 +1640,15 @@
       titleEl.textContent    = 'Edit Item';
       submitBtn.textContent  = 'Save Changes';
 
-      document.getElementById('form-id').value             = item.id;
-      document.getElementById('form-title').value          = item.title;
-      document.getElementById('form-initiative').value     = item.initiative || '';
-      document.getElementById('form-lane').value           = item.lane;
-      document.getElementById('form-work-mode').value      = item.workMode || '';
-      document.getElementById('form-stage').value          = item.stage || 'Unclear';
-      document.getElementById('form-week-relevance').value = item.weekRelevance || 'unclear';
-      document.getElementById('form-due-date').value       = item.dueDate || '';
-      document.getElementById('form-notes').value          = item.notes || '';
-      document.getElementById('form-next-step').value      = item.nextStep || '';
-      document.getElementById('form-open-loop').checked    = item.openLoop;
+      document.getElementById('form-id').value         = item.id;
+      document.getElementById('form-title').value      = item.title;
+      document.getElementById('form-initiative').value = item.initiative || '';
+      document.getElementById('form-lane').value       = item.lane;
+      document.getElementById('form-work-mode').value  = item.workMode || '';
+      document.getElementById('form-stage').value      = item.stage || 'Unclear';
+      document.getElementById('form-due-date').value   = item.dueDate || '';
+      document.getElementById('form-notes').value      = item.notes || '';
+      document.getElementById('form-next-step').value  = item.nextStep || '';
 
       if (item.waitingOnItemId) {
         const linked = state.items.find(i => i.id === item.waitingOnItemId);
@@ -1564,8 +1674,14 @@
   }
 
   function closeCaptureModal() {
-    document.getElementById('capture-modal').close();
-    document.getElementById('dep-dropdown').hidden = true;
+    const dialog = document.getElementById('capture-modal');
+    if (dialog && dialog.open) dialog.close();
+    const dropdown = document.getElementById('dep-dropdown');
+    if (dropdown) dropdown.hidden = true;
+    const newRow = document.getElementById('new-initiative-row');
+    if (newRow) newRow.hidden = true;
+    const newInput = document.getElementById('new-initiative-input');
+    if (newInput) newInput.value = '';
     state.ui.editingItemId = null;
   }
 
@@ -1581,14 +1697,16 @@
       lane:            data.get('lane')            || 'inbox',
       workMode:        data.get('workMode')        || null,
       stage:           data.get('stage')           || 'Unclear',
-      weekRelevance:   data.get('weekRelevance')   || 'unclear',
       dueDate:         data.get('dueDate')         || null,
       notes:           (data.get('notes')          || '').trim(),
       nextStep:        (data.get('nextStep')       || '').trim(),
       waitingOn:       (data.get('waitingOn')      || '').trim(),
       waitingOnItemId: data.get('waitingOnItemId') || null,
-      openLoop:        !!data.get('openLoop'),
     };
+
+    if (values.lane === 'waiting' && values.stage !== 'Done') {
+      values.stage = 'Blocked';
+    }
 
     if (state.ui.editingItemId) {
       updateItem(state.ui.editingItemId, values);
@@ -1848,11 +1966,9 @@
     const done     = allItems.filter(i => i.stage === 'Done')
       .sort((a, b) => (b.completedAt || b.updatedAt) - (a.completedAt || a.updatedAt));
 
-    const waitingCount = active.filter(i => i.stage === 'Waiting' || i.stage === 'Blocked').length;
-    const openLoopCount = active.filter(i => i.openLoop).length;
+    const blockedCount = active.filter(i => i.stage === 'Blocked').length;
     const parts = [`${active.length} active`, `${done.length} done`];
-    if (waitingCount)  parts.push(`${waitingCount} waiting/blocked`);
-    if (openLoopCount) parts.push(`${openLoopCount} open loop${openLoopCount > 1 ? 's' : ''}`);
+    if (blockedCount) parts.push(`${blockedCount} blocked`);
     summaryEl.textContent = parts.join(' · ');
 
     if (!allItems.length) {
@@ -1989,7 +2105,6 @@
       clickupList:   list,
       displayGroup:  mapping.displayGroup,
       lane:          mapping.lane,
-      weekRelevance: mapping.weekRelevance,
       stage:         mapping.itemStage,
       initiative,
       dueDate:       parseClickUpDate(row['Due Date'] || row['due_date'] || row['Due date'] || ''),
@@ -2034,7 +2149,7 @@
      13. WEEKLY REPORT GENERATOR
   ========================================================== */
 
-  function generateAttentionSummary(active, waiting, openLoops, overdue) {
+  function generateAttentionSummary(active, blocked, overdue) {
     const lines = [];
 
     if (overdue.length) {
@@ -2042,8 +2157,8 @@
       lines.push(`You have ${overdue.length} overdue item${overdue.length > 1 ? 's' : ''} requiring immediate attention: ${titles}.`);
     }
 
-    if (waiting.length) {
-      const withDeps = waiting.filter(i => i.waitingOn || i.waitingOnItemId);
+    if (blocked.length) {
+      const withDeps = blocked.filter(i => i.waitingOn || i.waitingOnItemId);
       if (withDeps.length) {
         const names = [...new Set(withDeps.map(i => {
           if (i.waitingOnItemId) {
@@ -2056,17 +2171,12 @@
       }
     }
 
-    const oldLoops = openLoops.filter(i => i.createdAt < Date.now() - 7 * 86400000);
-    if (oldLoops.length) {
-      lines.push(`${oldLoops.length} open loop${oldLoops.length > 1 ? 's have' : ' has'} been unresolved for over a week — decide this week whether to act, delegate, or explicitly park ${oldLoops.length > 1 ? 'them' : 'it'}.`);
-    }
-
     const weekItems = active.filter(i => i.lane === 'this-week' || i.lane === 'today');
     if (!lines.length && weekItems.length) {
       lines.push(`You have ${weekItems.length} active items in Today and This Week — a focused week ahead.`);
     }
     if (!lines.length) {
-      lines.push('The board looks relatively clear. Use this week to make progress on strategic radar items or clear open loops.');
+      lines.push('The board looks relatively clear. Use this week to make progress on strategic radar items.');
     }
 
     return lines.join('\n');
@@ -2086,8 +2196,7 @@
     const all           = state.items.filter(isReviewable);
     const completedWeek = all.filter(i => i.stage === 'Done' && (i.completedAt || i.updatedAt) >= weekStart);
     const active        = all.filter(i => isActiveVisible(i));
-    const waiting       = all.filter(i => (i.stage === 'Waiting' || i.stage === 'Blocked') && i.stage !== 'Done');
-    const openLoops     = all.filter(i => i.openLoop && i.stage !== 'Done');
+    const blocked       = all.filter(i => i.stage === 'Blocked');
     const overdue       = active.filter(i => i.dueDate && new Date(i.dueDate + 'T00:00:00') < now);
     const byInit        = groupBy(active, 'initiative');
 
@@ -2100,8 +2209,7 @@
 
     r += `ACTIVE BY INITIATIVE\n`;
     let hasAny = false;
-    INITIATIVES
-      .filter(i => !state.tabledInitiatives.includes(i) && !state.completedInitiatives.includes(i))
+    getActiveInitiatives()
       .forEach(init => {
         const items = byInit[init];
         if (!items?.length) return;
@@ -2116,9 +2224,9 @@
     if (!hasAny) r += `  No active items.\n`;
     r += '\n';
 
-    if (waiting.length) {
-      r += `WAITING / BLOCKED (${waiting.length})\n`;
-      waiting.forEach(i => {
+    if (blocked.length) {
+      r += `BLOCKED (${blocked.length})\n`;
+      blocked.forEach(i => {
         r += `  ⊘  ${i.title}`;
         if (i.waitingOnItemId) {
           const linked = state.items.find(x => x.id === i.waitingOnItemId);
@@ -2127,15 +2235,6 @@
           r += `  ← ${i.waitingOn}`;
         }
         r += '\n';
-      });
-      r += '\n';
-    }
-
-    if (openLoops.length) {
-      r += `OPEN LOOPS (${openLoops.length})\n`;
-      openLoops.forEach(i => {
-        const age = Math.round((Date.now() - i.createdAt) / 86400000);
-        r += `  ◌  ${i.title}  (${age}d)\n`;
       });
       r += '\n';
     }
@@ -2159,7 +2258,7 @@
     }
 
     r += `${LINE}\nWHAT NEEDS ATTENTION THIS WEEK\n\n`;
-    r += generateAttentionSummary(active, waiting, openLoops, overdue);
+    r += generateAttentionSummary(active, blocked, overdue);
     r += '\n';
 
     return r;
@@ -2219,6 +2318,21 @@
 
       const doneBtn = e.target.closest('[data-action="done"]');
       if (doneBtn) { e.stopPropagation(); markDone(doneBtn.dataset.id); return; }
+
+      const tableBtn = e.target.closest('[data-action="table"]');
+      if (tableBtn) { e.stopPropagation(); tableItem(tableBtn.dataset.id); return; }
+
+      const reactBtn = e.target.closest('[data-action="reactivate"]');
+      if (reactBtn) { e.stopPropagation(); reactivateItem(reactBtn.dataset.id); return; }
+
+      const archiveBtn = e.target.closest('[data-action="archive"]');
+      if (archiveBtn) { e.stopPropagation(); archiveItem(archiveBtn.dataset.id); return; }
+
+      const unarchiveBtn = e.target.closest('[data-action="unarchive"]');
+      if (unarchiveBtn) { e.stopPropagation(); unarchiveItem(unarchiveBtn.dataset.id); return; }
+
+      const deleteBtn = e.target.closest('[data-action="delete"]');
+      if (deleteBtn) { e.stopPropagation(); deleteItem(deleteBtn.dataset.id); return; }
 
       // Dependency link in card detail
       const depLink = e.target.closest('.dep-item-link');
@@ -2401,6 +2515,141 @@
       if (e.key === 'n' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
         openCaptureModal();
       }
+    });
+
+    /* --- Inline "Add Initiative" inside the capture modal --- */
+    const addInitBtn   = document.getElementById('add-initiative-btn');
+    const newInitRow   = document.getElementById('new-initiative-row');
+    const newInitInput = document.getElementById('new-initiative-input');
+    const newInitOk    = document.getElementById('new-initiative-confirm');
+    const newInitNo    = document.getElementById('new-initiative-cancel');
+
+    if (addInitBtn && newInitRow) {
+      addInitBtn.addEventListener('click', () => {
+        newInitRow.hidden = false;
+        if (newInitInput) { newInitInput.value = ''; newInitInput.focus(); }
+      });
+    }
+    if (newInitNo && newInitRow) {
+      newInitNo.addEventListener('click', () => {
+        newInitRow.hidden = true;
+        if (newInitInput) newInitInput.value = '';
+      });
+    }
+    if (newInitOk && newInitInput) {
+      const confirmAdd = () => {
+        const name = newInitInput.value.trim();
+        if (!name) return;
+        if (getAllInitiatives().includes(name)) {
+          showToast('Initiative already exists');
+          document.getElementById('form-initiative').value = name;
+          newInitRow.hidden = true;
+          newInitInput.value = '';
+          return;
+        }
+        addCustomInitiative(name);
+        populateFormSelects();
+        document.getElementById('form-initiative').value = name;
+        newInitRow.hidden = true;
+        newInitInput.value = '';
+        showToast(`"${name}" added`);
+      };
+      newInitOk.addEventListener('click', confirmAdd);
+      newInitInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); confirmAdd(); }
+      });
+    }
+
+    /* --- Drag and drop reordering (within or across lanes) --- */
+    setupDragAndDrop();
+  }
+
+  /* ==========================================================
+     15a. DRAG AND DROP REORDER
+  ========================================================== */
+
+  let _dragId = null;
+
+  function clearDragMarkers() {
+    document.querySelectorAll('.card--dragging, .card--drag-over')
+      .forEach(c => c.classList.remove('card--dragging', 'card--drag-over'));
+  }
+
+  function reorderItem(draggedId, targetId, dropAfter) {
+    const items = state.items;
+    const dragIdx = items.findIndex(i => i.id === draggedId);
+    if (dragIdx < 0) return;
+    const dragged = items[dragIdx];
+
+    const targetIdx = items.findIndex(i => i.id === targetId);
+    if (targetIdx < 0) return;
+    const target = items[targetIdx];
+
+    // If different lane, also adopt the target's lane (with auto-blocked rule)
+    if (dragged.lane !== target.lane) {
+      dragged.lane = target.lane;
+      if (target.lane === 'waiting' && dragged.stage !== 'Done') {
+        dragged.stage = 'Blocked';
+      }
+    }
+    dragged.updatedAt = Date.now();
+
+    items.splice(dragIdx, 1);
+    let newTargetIdx = items.findIndex(i => i.id === targetId);
+    if (dropAfter) newTargetIdx += 1;
+    items.splice(newTargetIdx, 0, dragged);
+
+    saveState();
+    render();
+  }
+
+  function setupDragAndDrop() {
+    document.addEventListener('dragstart', e => {
+      const card = e.target.closest('.card[draggable]');
+      if (!card) return;
+      _dragId = card.dataset.id;
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', _dragId); } catch (err) {}
+      requestAnimationFrame(() => card.classList.add('card--dragging'));
+    });
+
+    document.addEventListener('dragend', () => {
+      _dragId = null;
+      clearDragMarkers();
+    });
+
+    document.addEventListener('dragover', e => {
+      if (!_dragId) return;
+      const card = e.target.closest('.card[draggable]');
+      if (!card || card.dataset.id === _dragId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('.card--drag-over')
+        .forEach(c => { if (c !== card) c.classList.remove('card--drag-over'); });
+      card.classList.add('card--drag-over');
+    });
+
+    document.addEventListener('dragleave', e => {
+      const card = e.target.closest('.card[draggable]');
+      if (card) card.classList.remove('card--drag-over');
+    });
+
+    document.addEventListener('drop', e => {
+      if (!_dragId) return;
+      const card = e.target.closest('.card[draggable]');
+      if (!card) { clearDragMarkers(); _dragId = null; return; }
+      e.preventDefault();
+      const targetId = card.dataset.id;
+      if (targetId === _dragId) { clearDragMarkers(); _dragId = null; return; }
+
+      // Drop in the bottom half of the target = after; top half = before
+      const rect = card.getBoundingClientRect();
+      const dropAfter = (e.clientY - rect.top) > rect.height / 2;
+
+      const draggedId = _dragId;
+      _dragId = null;
+      clearDragMarkers();
+      reorderItem(draggedId, targetId, dropAfter);
     });
   }
 

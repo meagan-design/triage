@@ -19,13 +19,14 @@
 
     <nav class="lane-nav">
       <a href="#inbox"              class="nav-item" data-section="inbox">Inbox <span class="nav-badge" id="badge-inbox"></span></a>
+      <a href="#overdue"            class="nav-item nav-item--overdue" data-section="overdue">Overdue <span class="nav-badge" id="badge-overdue"></span></a>
       <a href="#needs-placement"    class="nav-item" data-section="needs-placement">Needs Placement <span class="nav-badge" id="badge-needs-placement"></span></a>
       <a href="#today"              class="nav-item" data-section="today">Today <span class="nav-badge" id="badge-today"></span></a>
       <a href="#this-week"          class="nav-item" data-section="this-week">This Week <span class="nav-badge" id="badge-this-week"></span></a>
       <a href="#this-month"         class="nav-item" data-section="this-month">This Month <span class="nav-badge" id="badge-this-month"></span></a>
       <a href="#strategic-radar"    class="nav-item" data-section="strategic-radar">Strategic Radar <span class="nav-badge" id="badge-strategic-radar"></span></a>
-      <a href="#open-loops"         class="nav-item" data-section="open-loops">Open Loops <span class="nav-badge" id="badge-open-loops"></span></a>
       <a href="#waiting"            class="nav-item" data-section="waiting">Waiting <span class="nav-badge" id="badge-waiting"></span></a>
+      <a href="#tabled-items"       class="nav-item" data-section="tabled-items">Tabled Items <span class="nav-badge" id="badge-tabled-items"></span></a>
       <a href="#tabled-initiatives" class="nav-item nav-item--tabled"    data-section="tabled-initiatives"    id="nav-tabled"    hidden>Tabled <span class="nav-badge" id="badge-tabled"></span></a>
       <a href="#completed-initiatives" class="nav-item nav-item--completed" data-section="completed-initiatives" id="nav-completed-init" hidden>Completed Init. <span class="nav-badge" id="badge-completed-init"></span></a>
       <a href="#completed-items"    class="nav-item" data-section="completed-items">Completed <span class="nav-badge" id="badge-completed-items"></span></a>
@@ -87,6 +88,13 @@
       <div id="cards-needs-placement"></div>
     </section>
 
+    <section id="overdue" class="lane lane--overdue" data-lane="overdue">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Overdue</h2><span class="lane-count" id="count-overdue"></span></div>
+      </header>
+      <div class="card-list" id="cards-overdue"></div>
+    </section>
+
     <section id="today" class="lane lane--today" data-lane="today">
       <header class="lane-header">
         <div class="lane-header-left"><h2>Today</h2><span class="lane-count" id="count-today"></span></div>
@@ -121,21 +129,21 @@
       <div id="cards-strategic-radar"></div>
     </section>
 
-    <section id="open-loops" class="lane lane--open-loops" data-lane="open-loops">
-      <header class="lane-header">
-        <div class="lane-header-left"><h2>Open Loops</h2><span class="lane-count" id="count-open-loops"></span></div>
-        <button class="add-to-lane-btn" data-lane="open-loops">+ Add</button>
-      </header>
-      <p class="lane-description">Unresolved issues consuming mental energy. Resolve or explicitly park.</p>
-      <div class="card-list" id="cards-open-loops"></div>
-    </section>
-
     <section id="waiting" class="lane lane--waiting" data-lane="waiting">
       <header class="lane-header">
         <div class="lane-header-left"><h2>Waiting / Blocked</h2><span class="lane-count" id="count-waiting"></span></div>
         <button class="add-to-lane-btn" data-lane="waiting">+ Add</button>
       </header>
       <div class="card-list" id="cards-waiting"></div>
+    </section>
+
+    <section id="tabled-items" class="lane lane--tabled-items" data-lane="tabled-items">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Tabled Items</h2><span class="lane-count" id="count-tabled-items"></span></div>
+        <button class="add-to-lane-btn" data-lane="tabled-items">+ Add</button>
+      </header>
+      <p class="lane-description">Items set aside — reactivate when ready.</p>
+      <div class="card-list" id="cards-tabled-items"></div>
     </section>
 
     <section id="tabled-initiatives" class="lane lane--tabled" data-lane="tabled-initiatives">
@@ -178,6 +186,13 @@
       <div id="cards-completed-items" class="card-list"></div>
     </section>
 
+    <section id="archived-items" class="lane lane--archived" data-lane="archived-items" hidden>
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Archived</h2><span class="lane-count" id="count-archived-items"></span></div>
+      </header>
+      <div class="card-list" id="cards-archived-items"></div>
+    </section>
+
     <section id="weekly-review" class="lane lane--review" data-lane="weekly-review">
       <header class="lane-header">
         <div class="lane-header-left"><h2>Weekly Review</h2></div>
@@ -210,7 +225,15 @@
       <div class="form-row">
         <div class="form-group">
           <label for="form-initiative">Initiative</label>
-          <select name="initiative" id="form-initiative"><option value="">— Unassigned —</option></select>
+          <div class="initiative-field-row">
+            <select name="initiative" id="form-initiative"><option value="">— Unassigned —</option></select>
+            <button type="button" id="add-initiative-btn" class="btn-add-initiative" title="Add new initiative">+</button>
+          </div>
+          <div id="new-initiative-row" class="new-initiative-row" hidden>
+            <input type="text" id="new-initiative-input" placeholder="Initiative name" autocomplete="off">
+            <button type="button" id="new-initiative-confirm">Add</button>
+            <button type="button" id="new-initiative-cancel">&#x2715;</button>
+          </div>
         </div>
         <div class="form-group">
           <label for="form-lane">Lane</label>
@@ -223,11 +246,10 @@
           <label for="form-work-mode">Work Mode</label>
           <select name="workMode" id="form-work-mode">
             <option value="">— None —</option>
-            <option value="figure-out">Figure out</option>
-            <option value="move-forward">Move forward</option>
-            <option value="communicate">Communicate</option>
-            <option value="review">Review</option>
+            <option value="figure-out">Figure Out</option>
             <option value="collaborate">Collaborate</option>
+            <option value="review">Review</option>
+            <option value="ready-to-launch">Ready to Launch</option>
           </select>
         </div>
         <div class="form-group">
@@ -236,7 +258,6 @@
             <option value="Unclear">Unclear</option>
             <option value="In progress">In progress</option>
             <option value="Ready">Ready</option>
-            <option value="Waiting">Waiting</option>
             <option value="Blocked">Blocked</option>
             <option value="Done">Done</option>
           </select>
@@ -244,15 +265,6 @@
       </div>
 
       <div class="form-row">
-        <div class="form-group">
-          <label for="form-week-relevance">Week Relevance</label>
-          <select name="weekRelevance" id="form-week-relevance">
-            <option value="unclear">Unclear</option>
-            <option value="this-week">This Week</option>
-            <option value="next-week">Next Week</option>
-            <option value="later">Later</option>
-          </select>
-        </div>
         <div class="form-group">
           <label for="form-due-date">Due Date</label>
           <input type="date" name="dueDate" id="form-due-date">
@@ -282,13 +294,6 @@
           <div id="dep-dropdown" class="dep-dropdown" hidden></div>
         </div>
         <input type="hidden" name="waitingOnItemId" id="form-waiting-on-item-id">
-      </div>
-
-      <div class="form-row--checkboxes">
-        <label class="checkbox-label">
-          <input type="checkbox" name="openLoop" id="form-open-loop">
-          <span>Open Loop</span>
-        </label>
       </div>
 
       <div class="form-actions">

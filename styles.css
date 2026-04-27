@@ -1180,6 +1180,25 @@ body {
 }
 
 /* ============================================================
+   DIALOG BASE — centered positioning fix
+   ============================================================ */
+
+dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+dialog::backdrop {
+  background: rgba(28,22,18,0.45);
+  backdrop-filter: blur(3px);
+}
+
+/* ============================================================
    CAPTURE MODAL
    ============================================================ */
 
@@ -1825,3 +1844,51 @@ body.app-locked #main-content { visibility: hidden; }
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.4; }
 }
+
+/* ============================================================
+   OVERDUE LANE
+   ============================================================ */
+.lane--overdue { border-left: 3px solid #c0614a; }
+#cards-overdue .card { border-left: 3px solid #c0614a; }
+
+/* ============================================================
+   TABLED ITEMS LANE
+   ============================================================ */
+.lane--tabled-items { opacity: 0.8; }
+
+/* ============================================================
+   ARCHIVED SECTION
+   ============================================================ */
+.lane--archived { opacity: 0.6; }
+
+/* ============================================================
+   DRAG REORDER
+   ============================================================ */
+.card[draggable] { cursor: default; }
+.card--dragging { opacity: 0.35; box-shadow: none; }
+.card--drag-over { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.drag-handle { cursor: grab; padding-right: 6px; color: var(--color-text-muted); font-size: 13px; line-height: 1; flex-shrink: 0; }
+
+/* ============================================================
+   ADD INITIATIVE INLINE
+   ============================================================ */
+.initiative-field-row { display: flex; gap: 6px; align-items: center; }
+.initiative-field-row select { flex: 1; }
+.btn-add-initiative { padding: 0 10px; height: 34px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg); color: var(--color-accent); font-size: 18px; cursor: pointer; line-height: 1; }
+.btn-add-initiative:hover { background: var(--color-accent-light); }
+.new-initiative-row { display: flex; gap: 6px; margin-top: 6px; }
+.new-initiative-row input { flex: 1; }
+.new-initiative-row button { padding: 4px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg); cursor: pointer; font-size: 13px; }
+
+/* ============================================================
+   CARD DANGER ACTIONS
+   ============================================================ */
+.card-danger-actions { display: flex; gap: 6px; padding-top: 8px; border-top: 1px solid var(--color-border-subtle); margin-top: 8px; }
+.btn-archive, .btn-delete { font-size: 11px; padding: 3px 8px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: var(--color-bg); cursor: pointer; color: var(--color-text-muted); }
+.btn-delete { color: #c0614a; border-color: #e8c4bc; }
+.btn-delete:hover { background: #fdf0ee; }
+
+/* ============================================================
+   WORK MODE — Ready to Launch
+   ============================================================ */
+.wm--ready-to-launch { background: #eef5f0; color: #386845; }
