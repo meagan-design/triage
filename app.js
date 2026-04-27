@@ -2291,8 +2291,8 @@
 
   function setupEvents() {
 
-    /* --- Main content --- */
-    document.getElementById('main-content').addEventListener('click', e => {
+    /* --- Card actions (delegated at body so clicks inside dialogs work too) --- */
+    document.body.addEventListener('click', e => {
       // Reopen completed initiative (button in completed-initiatives section)
       const reopenBtn = e.target.closest('[data-action="reopen-completed"]');
       if (reopenBtn && reopenBtn.dataset.initiative) {
