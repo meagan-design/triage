@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Strategic Triage Board</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="app-locked">
+
+  <aside id="sidebar">
+    <header class="sidebar-header">
+      <h1>Triage</h1>
+      <span class="week-label" id="week-label"></span>
+    </header>
+
+    <nav class="lane-nav">
+      <a href="#inbox"              class="nav-item" data-section="inbox">Inbox <span class="nav-badge" id="badge-inbox"></span></a>
+      <a href="#needs-placement"    class="nav-item" data-section="needs-placement">Needs Placement <span class="nav-badge" id="badge-needs-placement"></span></a>
+      <a href="#today"              class="nav-item" data-section="today">Today <span class="nav-badge" id="badge-today"></span></a>
+      <a href="#this-week"          class="nav-item" data-section="this-week">This Week <span class="nav-badge" id="badge-this-week"></span></a>
+      <a href="#this-month"         class="nav-item" data-section="this-month">This Month <span class="nav-badge" id="badge-this-month"></span></a>
+      <a href="#strategic-radar"    class="nav-item" data-section="strategic-radar">Strategic Radar <span class="nav-badge" id="badge-strategic-radar"></span></a>
+      <a href="#open-loops"         class="nav-item" data-section="open-loops">Open Loops <span class="nav-badge" id="badge-open-loops"></span></a>
+      <a href="#waiting"            class="nav-item" data-section="waiting">Waiting <span class="nav-badge" id="badge-waiting"></span></a>
+      <a href="#tabled-initiatives" class="nav-item nav-item--tabled"    data-section="tabled-initiatives"    id="nav-tabled"    hidden>Tabled <span class="nav-badge" id="badge-tabled"></span></a>
+      <a href="#completed-initiatives" class="nav-item nav-item--completed" data-section="completed-initiatives" id="nav-completed-init" hidden>Completed Init. <span class="nav-badge" id="badge-completed-init"></span></a>
+      <a href="#completed-items"    class="nav-item" data-section="completed-items">Completed <span class="nav-badge" id="badge-completed-items"></span></a>
+      <a href="#weekly-review"      class="nav-item" data-section="weekly-review">Weekly Review</a>
+    </nav>
+
+    <section class="initiative-panel">
+      <div class="initiative-panel-header">
+        <h3>Initiatives</h3>
+        <button id="clear-filter-btn" class="clear-filter-btn" hidden>Clear</button>
+      </div>
+      <ul id="initiative-list" class="initiative-list"></ul>
+
+      <div id="tabled-init-panel" class="tabled-init-panel" hidden>
+        <div class="tabled-init-header">Tabled</div>
+        <ul id="tabled-initiative-list" class="initiative-list initiative-list--secondary"></ul>
+      </div>
+
+      <div id="completed-init-panel" class="tabled-init-panel" hidden>
+        <div class="tabled-init-header">Completed</div>
+        <ul id="completed-initiative-list" class="initiative-list initiative-list--secondary"></ul>
+      </div>
+    </section>
+
+    <footer class="sidebar-footer">
+      <div class="sync-row">
+        <button id="export-json-btn" class="btn-sync">↓ Export</button>
+        <button id="import-json-btn" class="btn-sync">↑ Import</button>
+        <input type="file" id="json-file-input" accept=".json" hidden>
+      </div>
+      <div class="local-notice">
+        <span class="local-dot"></span>
+        Local only · Export to sync between devices
+      </div>
+      <button id="reset-data-btn" class="btn-reset">Clear all data</button>
+    </footer>
+  </aside>
+
+  <main id="main-content">
+
+    <section id="inbox" class="lane" data-lane="inbox">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Inbox</h2><span class="lane-count" id="count-inbox"></span></div>
+        <button class="add-to-lane-btn" data-lane="inbox">+ Add</button>
+      </header>
+      <div class="quick-capture-row">
+        <input type="text" id="quick-capture-input" placeholder="Capture anything — press Enter to save" autocomplete="off">
+        <button id="quick-capture-submit">Add</button>
+      </div>
+      <div class="card-list" id="cards-inbox"></div>
+    </section>
+
+    <section id="needs-placement" class="lane" data-lane="needs-placement">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Needs Placement</h2><span class="lane-count" id="count-needs-placement"></span></div>
+        <button class="add-to-lane-btn" data-lane="needs-placement">+ Add</button>
+      </header>
+      <p class="lane-description">Items awaiting triage — ClickUp imports and unplaced captures land here.</p>
+      <div id="cards-needs-placement"></div>
+    </section>
+
+    <section id="today" class="lane lane--today" data-lane="today">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Today</h2><span class="lane-count" id="count-today"></span></div>
+        <button class="add-to-lane-btn" data-lane="today">+ Add</button>
+      </header>
+      <p class="today-cap-warning" id="today-cap-warning" hidden>More than 5 items — consider moving some to This Week.</p>
+      <div class="card-list card-list--today" id="cards-today"></div>
+    </section>
+
+    <section id="this-week" class="lane" data-lane="this-week">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>This Week</h2><span class="lane-count" id="count-this-week"></span></div>
+        <button class="add-to-lane-btn" data-lane="this-week">+ Add</button>
+      </header>
+      <div id="cards-this-week"></div>
+    </section>
+
+    <section id="this-month" class="lane" data-lane="this-month">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>This Month</h2><span class="lane-count" id="count-this-month"></span></div>
+        <button class="add-to-lane-btn" data-lane="this-month">+ Add</button>
+      </header>
+      <div class="card-list" id="cards-this-month"></div>
+    </section>
+
+    <section id="strategic-radar" class="lane lane--radar" data-lane="strategic-radar">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Strategic Radar</h2><span class="lane-count" id="count-strategic-radar"></span></div>
+        <button class="add-to-lane-btn" data-lane="strategic-radar">+ Add</button>
+      </header>
+      <p class="lane-description">Active initiatives — tactical work should not crowd these out.</p>
+      <div id="cards-strategic-radar"></div>
+    </section>
+
+    <section id="open-loops" class="lane lane--open-loops" data-lane="open-loops">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Open Loops</h2><span class="lane-count" id="count-open-loops"></span></div>
+        <button class="add-to-lane-btn" data-lane="open-loops">+ Add</button>
+      </header>
+      <p class="lane-description">Unresolved issues consuming mental energy. Resolve or explicitly park.</p>
+      <div class="card-list" id="cards-open-loops"></div>
+    </section>
+
+    <section id="waiting" class="lane lane--waiting" data-lane="waiting">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Waiting / Blocked</h2><span class="lane-count" id="count-waiting"></span></div>
+        <button class="add-to-lane-btn" data-lane="waiting">+ Add</button>
+      </header>
+      <div class="card-list" id="cards-waiting"></div>
+    </section>
+
+    <section id="tabled-initiatives" class="lane lane--tabled" data-lane="tabled-initiatives">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Tabled Initiatives</h2><span class="lane-count" id="count-tabled"></span></div>
+      </header>
+      <p class="lane-description">On hold. Open items are preserved here until reactivated.</p>
+      <div id="cards-tabled-initiatives"></div>
+    </section>
+
+    <section id="completed-initiatives" class="lane lane--completed-init" data-lane="completed-initiatives">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Completed Initiatives</h2><span class="lane-count" id="count-completed-init"></span></div>
+      </header>
+      <p class="lane-description">Finished initiatives kept for reference.</p>
+      <div id="cards-completed-initiatives"></div>
+    </section>
+
+    <section id="completed-items" class="lane lane--completed-items" data-lane="completed-items">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Completed</h2><span class="lane-count" id="count-completed-items"></span></div>
+      </header>
+      <div class="completed-filters">
+        <div class="filter-row">
+          <span class="filter-label">Period</span>
+          <div class="filter-chips" id="completed-period-chips">
+            <button class="filter-chip active" data-period="all">All time</button>
+            <button class="filter-chip" data-period="this-week">This week</button>
+            <button class="filter-chip" data-period="this-month">This month</button>
+            <button class="filter-chip" data-period="past-3m">Past 3 months</button>
+          </div>
+        </div>
+        <div class="filter-row">
+          <span class="filter-label">Initiative</span>
+          <select id="completed-initiative-filter" class="filter-select">
+            <option value="">All initiatives</option>
+          </select>
+        </div>
+      </div>
+      <div id="cards-completed-items" class="card-list"></div>
+    </section>
+
+    <section id="weekly-review" class="lane lane--review" data-lane="weekly-review">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Weekly Review</h2></div>
+        <div class="review-actions">
+          <button id="generate-report-btn" class="btn-primary">Generate Report</button>
+          <button id="copy-report-btn" class="btn-secondary" hidden>Copy</button>
+        </div>
+      </header>
+      <div id="review-summary" class="review-summary"></div>
+      <div id="review-report-output" class="review-report-output" hidden>
+        <pre id="report-text"></pre>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Capture Modal -->
+  <dialog id="capture-modal">
+    <div class="modal-header">
+      <h3 id="modal-title">Capture Item</h3>
+      <button id="modal-close-btn" class="modal-close-btn" aria-label="Close">&times;</button>
+    </div>
+    <form id="capture-form" novalidate>
+      <input type="hidden" name="id" id="form-id">
+
+      <div class="form-group form-group--full">
+        <input type="text" name="title" id="form-title" placeholder="What is this?" required autocomplete="off">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="form-initiative">Initiative</label>
+          <select name="initiative" id="form-initiative"><option value="">— Unassigned —</option></select>
+        </div>
+        <div class="form-group">
+          <label for="form-lane">Lane</label>
+          <select name="lane" id="form-lane"></select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="form-work-mode">Work Mode</label>
+          <select name="workMode" id="form-work-mode">
+            <option value="">— None —</option>
+            <option value="figure-out">Figure out</option>
+            <option value="move-forward">Move forward</option>
+            <option value="communicate">Communicate</option>
+            <option value="review">Review</option>
+            <option value="collaborate">Collaborate</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="form-stage">Stage</label>
+          <select name="stage" id="form-stage">
+            <option value="Unclear">Unclear</option>
+            <option value="In progress">In progress</option>
+            <option value="Ready">Ready</option>
+            <option value="Waiting">Waiting</option>
+            <option value="Blocked">Blocked</option>
+            <option value="Done">Done</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="form-week-relevance">Week Relevance</label>
+          <select name="weekRelevance" id="form-week-relevance">
+            <option value="unclear">Unclear</option>
+            <option value="this-week">This Week</option>
+            <option value="next-week">Next Week</option>
+            <option value="later">Later</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="form-due-date">Due Date</label>
+          <input type="date" name="dueDate" id="form-due-date">
+        </div>
+      </div>
+
+      <div class="form-group form-group--full">
+        <label for="form-notes">Notes</label>
+        <textarea name="notes" id="form-notes" rows="2" placeholder="Context, background, links..."></textarea>
+      </div>
+
+      <div class="form-group form-group--full">
+        <label for="form-next-step">Next Step</label>
+        <input type="text" name="nextStep" id="form-next-step" placeholder="What needs to happen first?">
+      </div>
+
+      <div class="form-group form-group--full">
+        <label>Waiting On</label>
+        <div class="dependency-field">
+          <div class="dep-linked-chip" id="dep-linked-chip" hidden>
+            <span class="dep-arrow">→ Linked:</span>
+            <span id="dep-linked-title" class="dep-linked-title"></span>
+            <button type="button" id="dep-clear-btn" class="dep-clear-btn" aria-label="Remove link">×</button>
+          </div>
+          <input type="text" name="waitingOn" id="form-waiting-on"
+                 placeholder="Person, thing, or type to link an existing item…" autocomplete="off">
+          <div id="dep-dropdown" class="dep-dropdown" hidden></div>
+        </div>
+        <input type="hidden" name="waitingOnItemId" id="form-waiting-on-item-id">
+      </div>
+
+      <div class="form-row--checkboxes">
+        <label class="checkbox-label">
+          <input type="checkbox" name="openLoop" id="form-open-loop">
+          <span>Open Loop</span>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-primary" id="form-submit-btn">Save Item</button>
+        <button type="button" id="modal-cancel-btn" class="btn-secondary">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Initiative Detail Modal -->
+  <dialog id="initiative-detail-modal">
+    <div class="init-detail-header">
+      <div class="init-detail-title-row">
+        <h3 id="init-detail-name"></h3>
+        <button id="init-detail-close-btn" class="modal-close-btn" aria-label="Close">&times;</button>
+      </div>
+      <p id="init-detail-summary" class="init-detail-summary"></p>
+    </div>
+    <div id="init-detail-body" class="init-detail-body"></div>
+  </dialog>
+
+  <!-- Initiative Action Popover -->
+  <div id="initiative-action-popover" class="initiative-action-popover" hidden>
+    <div class="init-action-name" id="init-action-name"></div>
+    <div class="init-action-options" id="init-action-options"></div>
+  </div>
+
+  <!-- Move Popover -->
+  <div id="move-popover" class="move-popover" hidden>
+    <div class="move-popover-header">Move to</div>
+    <div id="move-popover-options" class="move-popover-options"></div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" hidden></div>
+
+  <!-- Sync indicator -->
+  <div id="sync-indicator" class="sync-indicator">
+    <span class="sync-dot" id="sync-dot"></span>
+    <span id="sync-label">Saved</span>
+  </div>
+
+  <!-- Password Gate -->
+  <div id="password-gate" class="password-gate">
+    <div class="password-card">
+      <h2 class="password-title">Triage</h2>
+      <p class="password-hint">Enter password to continue</p>
+      <form id="password-form" novalidate>
+        <input
+          type="password"
+          id="password-input"
+          class="password-input"
+          placeholder="Password"
+          autocomplete="current-password"
+          autofocus>
+        <p id="password-error" class="password-error" hidden>Incorrect password</p>
+        <button type="submit" class="password-submit">Unlock</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
