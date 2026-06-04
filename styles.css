@@ -508,6 +508,9 @@ body {
 .lane--open-loops .lane-header { border-bottom-color: var(--color-open-loop-border); }
 .lane--open-loops .lane-header h2 { color: var(--color-open-loop); }
 
+/* Delegate */
+.lane--delegate .lane-header h2 { color: var(--color-import-progress); }
+
 /* Waiting */
 .lane--waiting .lane-header h2 { color: var(--color-accent-warm); }
 

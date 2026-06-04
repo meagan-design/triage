@@ -33,6 +33,7 @@
     { id: 'this-week',       label: 'This Week' },
     { id: 'this-month',      label: 'This Month' },
     { id: 'strategic-radar', label: 'Strategic Radar' },
+    { id: 'delegate',        label: 'Delegate' },
     { id: 'waiting',         label: 'Waiting / Blocked' },
     { id: 'tabled-items',    label: 'Tabled Items' },
   ];

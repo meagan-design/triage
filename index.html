@@ -25,6 +25,7 @@
       <a href="#this-week"          class="nav-item" data-section="this-week">This Week <span class="nav-badge" id="badge-this-week"></span></a>
       <a href="#this-month"         class="nav-item" data-section="this-month">This Month <span class="nav-badge" id="badge-this-month"></span></a>
       <a href="#strategic-radar"    class="nav-item" data-section="strategic-radar">Strategic Radar <span class="nav-badge" id="badge-strategic-radar"></span></a>
+      <a href="#delegate"           class="nav-item" data-section="delegate">Delegate <span class="nav-badge" id="badge-delegate"></span></a>
       <a href="#waiting"            class="nav-item" data-section="waiting">Waiting <span class="nav-badge" id="badge-waiting"></span></a>
       <a href="#tabled-items"       class="nav-item" data-section="tabled-items">Tabled Items <span class="nav-badge" id="badge-tabled-items"></span></a>
       <a href="#tabled-initiatives" class="nav-item nav-item--tabled"    data-section="tabled-initiatives"    id="nav-tabled"    hidden>Tabled <span class="nav-badge" id="badge-tabled"></span></a>
@@ -127,6 +128,15 @@
       </header>
       <p class="lane-description">Active initiatives — tactical work should not crowd these out.</p>
       <div id="cards-strategic-radar"></div>
+    </section>
+
+    <section id="delegate" class="lane lane--delegate" data-lane="delegate">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Delegate</h2><span class="lane-count" id="count-delegate"></span></div>
+        <button class="add-to-lane-btn" data-lane="delegate">+ Add</button>
+      </header>
+      <p class="lane-description">Items handed off to someone else — track progress without owning the next step.</p>
+      <div class="card-list" id="cards-delegate"></div>
     </section>
 
     <section id="waiting" class="lane lane--waiting" data-lane="waiting">
