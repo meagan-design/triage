@@ -79,6 +79,8 @@ html { scroll-behavior: smooth; }
 body {
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-areas: "sidebar main";
+  direction: ltr;
   min-height: 100vh;
   font-family: var(--font-sans);
   background: var(--color-bg);
@@ -87,6 +89,9 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
+
+#sidebar      { grid-area: sidebar; }
+#main-content { grid-area: main; }
 
 /* ============================================================
    SIDEBAR
@@ -1714,7 +1719,10 @@ dialog#initiative-detail-modal::backdrop {
    ============================================================ */
 
 @media (max-width: 860px) {
-  body { grid-template-columns: 1fr; }
+  body {
+    grid-template-columns: 1fr;
+    grid-template-areas: "sidebar" "main";
+  }
   #sidebar { position: relative; height: auto; }
   #main-content { padding: var(--space-md); }
   .form-row { grid-template-columns: 1fr; }
