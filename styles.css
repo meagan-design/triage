@@ -892,6 +892,28 @@ body {
   flex: 1;
 }
 
+/* Next-step preview line — subtle, secondary to title, max 2 lines */
+.card-next-step {
+  font-size: 0.76rem;
+  color: var(--color-text-secondary);
+  margin: 6px 0 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding-left: 18px;
+  position: relative;
+}
+.card-next-step::before {
+  content: '→';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
 .card-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1336,6 +1358,63 @@ dialog#capture-modal::backdrop {
 .form-group input::placeholder,
 .form-group textarea::placeholder { color: var(--color-text-muted); }
 .form-group textarea { resize: vertical; min-height: 60px; }
+
+/* Soft helper text under a form field — never blocks save */
+.form-helper {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+.form-helper--vague {
+  color: var(--color-accent-warm);
+  background: var(--color-accent-warm-light);
+  border-left: 2px solid var(--color-accent-warm);
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+}
+
+/* Collapsible triage prompts inside the capture/edit modal */
+.triage-prompts {
+  margin-top: 6px;
+  font-size: 0.74rem;
+  color: var(--color-text-muted);
+}
+.triage-prompts > summary {
+  cursor: pointer;
+  display: inline-block;
+  padding: 3px 0;
+  user-select: none;
+  color: var(--color-text-secondary);
+  list-style: none;
+}
+.triage-prompts > summary::-webkit-details-marker { display: none; }
+.triage-prompts > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 120ms;
+  color: var(--color-text-muted);
+}
+.triage-prompts[open] > summary::before {
+  transform: rotate(90deg);
+}
+.triage-prompts > summary:hover { color: var(--color-text-primary); }
+.triage-prompts ul {
+  list-style: none;
+  margin: 6px 0 2px;
+  padding: 6px 10px;
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--color-border);
+}
+.triage-prompts li {
+  padding: 3px 0;
+  line-height: 1.45;
+}
+.triage-prompts em {
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
 
 .checkbox-label {
   display: flex;

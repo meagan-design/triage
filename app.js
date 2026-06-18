@@ -182,12 +182,25 @@
         // Don't clobber active editing
         if (document.querySelector('dialog[open]')) return;
         restoreStateFromData(payload.new.data);
+        applyMigrations();
         // Cache locally
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload.new.data)); } catch(e) {}
         render();
         showToast('Board updated from another device', 2000);
       })
-      .subscribe();
+      .subscribe(status => {
+        console.info('[triage] realtime status:', status);
+      });
+  }
+
+  function setupVisibilityRefresh() {
+    // Mobile Safari (and any background-suspended tab) can lose the realtime
+    // WebSocket. Re-fetch from Supabase when the tab returns to foreground.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refreshFromSupabase();
+    });
+    // Also refresh on focus, as a belt-and-suspenders for desktop window switches.
+    window.addEventListener('focus', () => refreshFromSupabase());
   }
 
   /* ==========================================================
@@ -221,6 +234,16 @@
     scheduleSupabasePush(data);
   }
 
+  function applyMigrations() {
+    // Idempotent — safe to run every load. Maps deprecated values forward.
+    state.items.forEach(item => {
+      if (item.lane === 'open-loops') item.lane = 'needs-placement';
+      if (['communicate', 'move-forward'].includes(item.workMode)) item.workMode = null;
+      if (item.stage === 'Waiting') item.stage = 'Blocked';
+      if (item.stage === 'Ready')   item.stage = 'Pending';
+    });
+  }
+
   async function loadState() {
     // 1. Restore from localStorage first so UI can render immediately
     const cached = localStorage.getItem(STORAGE_KEY);
@@ -230,6 +253,7 @@
     }
 
     // 2. Fetch from Supabase (authoritative, most recent across devices)
+    let loadedFromSupabase = false;
     if (supabaseClient) {
       try {
         const { data, error } = await supabaseClient
@@ -240,27 +264,55 @@
         if (!error && data?.data) {
           restoreStateFromData(data.data);
           try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data.data)); } catch(e) {}
-          return;
+          loadedFromSupabase = true;
+          console.info('[triage] Loaded state from Supabase.');
+        } else if (error) {
+          console.warn('[triage] Supabase load returned error:', error);
         }
       } catch (e) {
-        console.warn('Supabase load failed, using local data:', e);
+        console.warn('[triage] Supabase load threw, using local data:', e);
       }
     }
 
     // 3. Fresh install (nothing local, nothing remote)
-    if (!hasLocalData) {
+    if (!hasLocalData && !loadedFromSupabase) {
       state.items             = getInitialData();
       state.tabledInitiatives = DEFAULT_TABLED.slice();
       saveState();
     }
 
-    // 4. Run migrations
-    state.items.forEach(item => {
-      if (item.lane === 'open-loops') item.lane = 'needs-placement';
-      if (['communicate', 'move-forward'].includes(item.workMode)) item.workMode = null;
-      if (item.stage === 'Waiting') item.stage = 'Blocked';
-      if (item.stage === 'Ready')   item.stage = 'Pending';
-    });
+    // 4. Always apply migrations — even after a successful Supabase load,
+    //    so legacy values from older clients can't slip through.
+    applyMigrations();
+  }
+
+  // Used by visibilitychange handler to pick up writes from other devices
+  // when the realtime subscription has been suspended (mobile background tabs).
+  async function refreshFromSupabase() {
+    if (!supabaseClient) return;
+    // Don't clobber an active edit
+    if (document.querySelector('dialog[open]')) return;
+    try {
+      const { data, error } = await supabaseClient
+        .from('triage_state')
+        .select('data')
+        .eq('id', 'main')
+        .single();
+      if (error) { console.warn('[triage] visibility refresh error:', error); return; }
+      if (!data?.data) return;
+
+      const remoteJson = JSON.stringify(data.data);
+      const localJson  = localStorage.getItem(STORAGE_KEY);
+      if (remoteJson === localJson) return; // already up to date
+
+      restoreStateFromData(data.data);
+      try { localStorage.setItem(STORAGE_KEY, remoteJson); } catch(e) {}
+      applyMigrations();
+      render();
+      console.info('[triage] State refreshed from Supabase on visibility change.');
+    } catch (e) {
+      console.warn('[triage] visibility refresh threw:', e);
+    }
   }
 
   // Migrate a v1 item to v2 schema
@@ -1098,6 +1150,7 @@
             ${item.source === 'clickup' ? '<span class="source-badge">CU</span>' : ''}
             <h4 class="card-title">${escapeHtml(item.title)}</h4>
           </div>
+          ${item.nextStep ? `<div class="card-next-step" title="Next step">${escapeHtml(item.nextStep)}</div>` : ''}
           <div class="card-meta">
             ${item.initiative
               ? `<span class="initiative-tag" title="${escapeHtml(item.initiative)}">${escapeHtml(item.initiative)}</span>`
@@ -1680,6 +1733,7 @@
     }
 
     dialog.showModal();
+    updateVagueHelper();
     setTimeout(() => document.getElementById('form-title').focus(), 60);
   }
 
@@ -1692,6 +1746,10 @@
     if (newRow) newRow.hidden = true;
     const newInput = document.getElementById('new-initiative-input');
     if (newInput) newInput.value = '';
+    const vague = document.getElementById('form-next-step-vague');
+    if (vague) { vague.hidden = true; vague.textContent = ''; }
+    const prompts = document.querySelector('.triage-prompts');
+    if (prompts) prompts.open = false;
     state.ui.editingItemId = null;
   }
 
@@ -2572,6 +2630,45 @@
 
     /* --- Drag and drop reordering (within or across lanes) --- */
     setupDragAndDrop();
+
+    /* --- Vague-next-step soft warning --- */
+    const nextStepInput = document.getElementById('form-next-step');
+    if (nextStepInput) {
+      nextStepInput.addEventListener('input', updateVagueHelper);
+    }
+  }
+
+  /* ==========================================================
+     15b. VAGUE NEXT-STEP HELPER
+  ========================================================== */
+
+  const VAGUE_PATTERNS = [
+    /\bfigure\s+out\b/i,
+    /\bwork\s+on\b/i,
+    /\bdeal\s+with\b/i,
+    /\bthink\s+about\b/i,
+    /\bhandle\b/i,
+    /\blook\s+at\b/i,
+  ];
+
+  function isVagueNextStep(text) {
+    if (!text) return false;
+    const trimmed = text.trim();
+    if (trimmed.length < 3) return false;
+    return VAGUE_PATTERNS.some(p => p.test(trimmed));
+  }
+
+  function updateVagueHelper() {
+    const input  = document.getElementById('form-next-step');
+    const helper = document.getElementById('form-next-step-vague');
+    if (!input || !helper) return;
+    if (isVagueNextStep(input.value)) {
+      helper.hidden = false;
+      helper.textContent = 'A bit vague — try a concrete verb like "Email X", "Draft outline", or "Schedule block".';
+    } else {
+      helper.hidden = true;
+      helper.textContent = '';
+    }
   }
 
   /* ==========================================================
@@ -2714,6 +2811,7 @@
     setupDependencySearch();
     setupEvents();
     setupRealtimeSync();
+    setupVisibilityRefresh();
 
     setTimeout(() => {
       document.getElementById('today')?.scrollIntoView({ behavior: 'smooth', block: 'start' });

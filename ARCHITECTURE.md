@@ -169,6 +169,15 @@ Five values: `Unclear` (default), `In progress`, `Pending`, `Blocked`, `Done`.
 - **Modal** has fields for title, initiative, lane, work mode, stage, due date, notes, next step, waiting-on (free text or linked item).
 - **`Cmd/Ctrl+K`** or **`n`** opens the capture modal globally.
 
+#### Next-step triage aid
+
+The Next Step field has two lightweight helpers, none of which block save:
+
+- **Vague-step warning** — `isVagueNextStep()` matches phrases like *figure out, work on, deal with, think about, handle, look at* and shows an amber helper line suggesting a concrete verb instead. Re-checks on every keystroke and when the modal opens for editing.
+- **Triage prompts** — a collapsed `<details>` block below the field expands to four questions: *What is this, really? / What is the job right now? / What kind of progress is needed? / What is the single next concrete step?* Closed by default; resets to closed when the modal closes.
+
+`nextStep` is also surfaced on the collapsed card as a single `→` line under the title, max 2 lines, hidden when empty.
+
 ### Edit
 
 Click the **Edit** button on any card to reopen the same modal with the item loaded. Submitting calls `updateItem` and stamps `updatedAt`.
@@ -246,7 +255,7 @@ The sync indicator (bottom-right) shows "Syncing…" briefly during a Supabase p
 
 ### Schema migrations on load
 
-`loadState()` runs these conversions on every page load:
+`applyMigrations()` runs after **every** load path (initial localStorage hydrate, Supabase fetch, realtime push, and visibility-change refresh). It is idempotent and only re-maps deprecated values:
 
 ```js
 if (item.lane === 'open-loops')                          item.lane = 'needs-placement';
@@ -256,6 +265,10 @@ if (item.stage === 'Ready')                              item.stage = 'Pending';
 ```
 
 A v1→v2 migration also exists (`migrateItem`) for items captured under the original schema with `status`, `mentalWeight`, `executionType` fields.
+
+### Visibility-based refresh
+
+`setupVisibilityRefresh()` registers `visibilitychange` + `focus` listeners that call `refreshFromSupabase()` whenever the tab returns to the foreground. This guards against the realtime WebSocket being silently killed during mobile-Safari tab suspension. The refresh respects the dialog-open guard and short-circuits if remote state is byte-identical to local cache.
 
 ---
 
