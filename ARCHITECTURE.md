@@ -253,6 +253,10 @@ Three layers, in order of priority:
 
 The sync indicator (bottom-right) shows "Syncing…" briefly during a Supabase push, then "Saved" for 2s.
 
+### Fresh-install safety guard
+
+`loadState` will seed `getInitialData()` defaults **only if `localStorage.getItem(STORAGE_KEY)` is null AND the Supabase fetch returned nothing.** Bytes in localStorage are treated as opaque evidence of user data, even when they fail to parse. The previous logic (`!hasLocalData && !loadedFromSupabase`) could silently overwrite a corrupt localStorage entry with seed defaults when Supabase was unreachable — a hidden destructive path. The current logic surfaces the parse failure in the diagnostic panel and the sync indicator goes to `error` state instead.
+
 ### Schema migrations on load
 
 `applyMigrations()` runs after **every** load path (initial localStorage hydrate, Supabase fetch, realtime push, and visibility-change refresh). It is idempotent and only re-maps deprecated values:

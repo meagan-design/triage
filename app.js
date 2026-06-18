@@ -351,6 +351,7 @@
                           ? new Date(_sync.localSnapshot.latestUpdatedAt).toISOString() : null,
         storedBytes,
         currentItems:   state.items.length,
+        parseError:     _sync.localParseError || null,
       },
       fetch: {
         lastAt:         _sync.lastFetchAt ? new Date(_sync.lastFetchAt).toISOString() : null,
@@ -420,6 +421,7 @@
         row('Latest updatedAt',   d.local.latestUpdated),
         row('Stored bytes',       d.local.storedBytes),
         row('Items in memory',    d.local.currentItems),
+        row('Parse error',        d.local.parseError),
       ])}
       ${section('LAST FETCH FROM SUPABASE', [
         row('At',              d.fetch.lastAt),
@@ -530,12 +532,26 @@
     const cached = localStorage.getItem(STORAGE_KEY);
     let hasLocalData = false;
     let localParsed  = null;
+    let localParseError = null;
     if (cached) {
-      try { localParsed = JSON.parse(cached); restoreStateFromData(localParsed); hasLocalData = true; } catch(e) {
-        console.warn('[triage] localStorage parse failed:', e);
+      try {
+        localParsed = JSON.parse(cached);
+        if (localParsed && typeof localParsed === 'object' && Array.isArray(localParsed.items)) {
+          restoreStateFromData(localParsed);
+          hasLocalData = true;
+        } else {
+          // Parsed but wrong shape — treat as opaque; do NOT overwrite.
+          localParseError = 'Parsed but no items array (shape: ' +
+            (localParsed === null ? 'null' : Array.isArray(localParsed) ? 'array' : typeof localParsed) + ')';
+        }
+      } catch (e) {
+        localParseError = 'JSON.parse threw: ' + String(e && e.message || e);
       }
     }
-    _sync.localSnapshot = localParsed ? _stateSummary(localParsed) : { items: 0, latestUpdatedAt: null, bytes: cached ? cached.length : 0 };
+    _sync.localParseError = localParseError;
+    _sync.localSnapshot = hasLocalData
+      ? _stateSummary(localParsed)
+      : { items: 0, latestUpdatedAt: null, bytes: cached ? cached.length : 0, parseError: localParseError };
     console.info('[triage] local snapshot at boot:', _sync.localSnapshot);
 
     // 2. Fetch from Supabase (authoritative, most recent across devices)
@@ -582,11 +598,24 @@
       renderSyncIndicator();
     }
 
-    // 3. Fresh install (nothing local, nothing remote)
-    if (!hasLocalData && !loadedFromSupabase) {
+    // 3. Fresh install — ONLY when localStorage is truly empty AND Supabase
+    //    didn't yield anything. If localStorage has ANY bytes (even unparseable),
+    //    we treat that as "user has data" and refuse to overwrite with seed
+    //    defaults — even when we can't read them. This prevents silent data
+    //    contamination when a corrupt localStorage value combines with a failed
+    //    Supabase fetch.
+    if (!cached && !loadedFromSupabase) {
       state.items             = getInitialData();
       state.tabledInitiatives = DEFAULT_TABLED.slice();
       saveState();
+      console.info('[triage] Seeded defaults (no local data, no remote).');
+    } else if (!hasLocalData && !loadedFromSupabase) {
+      // localStorage had bytes but they were unparseable AND Supabase failed.
+      // Refuse to seed — leave state empty and surface a sticky error so the
+      // user knows their data is unreachable, not gone.
+      console.warn('[triage] localStorage unparseable AND Supabase unreachable — NOT seeding defaults.');
+      _sync.state = 'error';
+      renderSyncIndicator();
     }
 
     // 4. Always apply migrations
