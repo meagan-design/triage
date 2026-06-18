@@ -10,7 +10,7 @@
   ========================================================== */
 
   const STORAGE_KEY = 'triage_board_v4';
-  const APP_VERSION = '20260618g';
+  const APP_VERSION = '20260618h';
 
   /* ----------------------------------------------------------
      SUPABASE CONFIG
@@ -477,14 +477,16 @@
         return row(name, `${tag} · ${p.ms}ms · ${p.errorName || '?'} · ${p.error || ''}`);
       };
       connHtml = section('CONNECTIVITY PROBE ' + (d.connectivity.at ? '(' + d.connectivity.at + ')' : ''), [
-        probeRow('cloudflare 1.1.1.1',     r.cloudflareTrace),
-        probeRow('httpbin.org JSON',       r.httpbin),
-        probeRow('api.github.com JSON',    r.githubApi),
-        probeRow('supabase.com (home)',    r.supabaseHome),
-        probeRow('jsdelivr SDK origin',    r.jsdelivr),
-        probeRow('your supabase REST root', r.supabaseRoot),
-        probeRow('your supabase authed',    r.supabaseAuthed),
-        probeRow('your supabase realtime',  r.supabaseRealtime),
+        probeRow('cloudflare 1.1.1.1',          r.cloudflareTrace),
+        probeRow('httpbin.org JSON',            r.httpbin),
+        probeRow('api.github.com JSON',         r.githubApi),
+        probeRow('supabase.com (home)',         r.supabaseHome),
+        probeRow('jsdelivr SDK origin',         r.jsdelivr),
+        probeRow('your supabase REST root',     r.supabaseRoot),
+        probeRow('your supabase authed',        r.supabaseAuthed),
+        probeRow('your supabase realtime',      r.supabaseRealtime),
+        probeRow('your supabase via <img>',     r.supabaseImage),
+        probeRow('your supabase via WebSocket', r.supabaseSocket),
       ]);
     }
 
@@ -564,6 +566,56 @@
     }
   }
 
+  // Image element bypasses the fetch() API. If the network layer is fine but
+  // fetch is being blocked by something like cross-site tracker prevention,
+  // img loads can still succeed.
+  function _probeImage(url) {
+    return new Promise(resolve => {
+      const t = Date.now();
+      const img = new Image();
+      const timer = setTimeout(() => {
+        img.onload = img.onerror = null;
+        resolve({ url, ok: false, ms: Date.now() - t, instantFail: false, error: 'timeout' });
+      }, 5000);
+      img.onload = () => { clearTimeout(timer); resolve({ url, ok: true, ms: Date.now() - t, instantFail: false }); };
+      img.onerror = () => {
+        clearTimeout(timer);
+        const ms = Date.now() - t;
+        resolve({ url, ok: false, ms, instantFail: ms < 10, error: 'error event' });
+      };
+      img.src = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+    });
+  }
+
+  // Direct WebSocket constructor uses a different code path than fetch.
+  function _probeWebSocket(url) {
+    return new Promise(resolve => {
+      const t = Date.now();
+      let ws;
+      try { ws = new WebSocket(url); }
+      catch (e) {
+        const ms = Date.now() - t;
+        const cap = _captureError(e);
+        return resolve({ url, ok: false, ms, instantFail: ms < 10, errorName: cap.name, error: cap.msg });
+      }
+      const timer = setTimeout(() => {
+        try { ws.close(); } catch (e) {}
+        resolve({ url, ok: false, ms: Date.now() - t, instantFail: false, error: 'timeout' });
+      }, 5000);
+      ws.onopen = () => {
+        clearTimeout(timer);
+        const ms = Date.now() - t;
+        try { ws.close(); } catch (e) {}
+        resolve({ url, ok: true, ms, instantFail: false });
+      };
+      ws.onerror = () => {
+        clearTimeout(timer);
+        const ms = Date.now() - t;
+        resolve({ url, ok: false, ms, instantFail: ms < 10, error: 'error event' });
+      };
+    });
+  }
+
   // Probe a deliberately broad set so we can localize the failure layer:
   //   - mainstream JSON APIs (httpbin, github)             → general HTTPS health
   //   - cloudflare 1.1.1.1 trace                           → generic network round trip
@@ -584,6 +636,13 @@
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
     });
     results.supabaseRealtime = await _probe(SUPABASE_URL + '/realtime/v1/api/tenants/health', { cache: 'no-store' });
+
+    // Non-fetch paths to the same hostname — distinguish fetch-layer vs
+    // hostname-layer blocking.
+    results.supabaseImage  = await _probeImage(SUPABASE_URL + '/favicon.ico');
+    results.supabaseSocket = await _probeWebSocket(
+      SUPABASE_URL.replace(/^https/, 'wss') + '/realtime/v1/websocket?apikey=' + SUPABASE_ANON_KEY + '&vsn=1.0.0'
+    );
 
     _sync.connectivity = { at: new Date().toISOString(), results };
     console.info('[triage] connectivity probe:', _sync.connectivity);
