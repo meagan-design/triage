@@ -10,6 +10,7 @@
   ========================================================== */
 
   const STORAGE_KEY = 'triage_board_v4';
+  const APP_VERSION = '20260618f';
 
   /* ----------------------------------------------------------
      SUPABASE CONFIG
@@ -123,25 +124,63 @@
   // indicator and the in-page diagnostic panel. Captured here so we don't need
   // devtools open on phone to see what is actually happening.
   const _sync = {
-    state:            'init',           // init | syncing | synced | error | local-only | offline
-    sdkLoaded:        null,             // window.supabase present?
-    clientReady:      false,            // createClient succeeded
-    initError:        null,
-    lastFetchAt:      null,             // ms epoch
-    lastFetchOk:      null,             // true | false | null
-    lastFetchError:   null,
-    lastFetchSummary: null,             // { items, latestUpdatedAt, bytes, fromVisibility }
-    lastPushAt:       null,
-    lastPushOk:       null,
-    lastPushError:    null,
-    pushAttempts:     0,
-    pushRetries:      0,
-    realtimeStatus:   null,
-    realtimeEvents:   0,
-    realtimeApplied:  0,
-    realtimeSkipped:  0,
-    localSnapshot:    null,             // captured at boot
+    state:             'init',           // init | syncing | synced | error | local-only | offline
+    sdkLoaded:         null,             // window.supabase present?
+    clientReady:       false,            // createClient succeeded
+    initError:         null,
+    lastFetchAt:       null,             // ms epoch
+    lastFetchOk:       null,             // true | false | null
+    lastFetchError:    null,             // human message
+    lastFetchErrorName:null,             // e.name (TypeError | etc.)
+    lastFetchErrorClass:null,            // e.constructor.name
+    lastFetchUrl:      null,             // exact URL attempted
+    lastFetchSummary:  null,             // { items, latestUpdatedAt, bytes, fromVisibility }
+    lastPushAt:        null,
+    lastPushOk:        null,
+    lastPushError:     null,
+    lastPushErrorName: null,
+    pushAttempts:      0,
+    pushRetries:       0,
+    pushBlocked:       false,            // true when guard refused an auto-push
+    pushBlockedReason: null,
+    realtimeStatus:    null,
+    realtimeEvents:    0,
+    realtimeApplied:   0,
+    realtimeSkipped:   0,
+    localSnapshot:     null,             // captured at boot
+    localParseError:   null,
+    connectivity:      null,             // last connectivity-probe result
   };
+
+  // The exact URL Supabase REST hits — used for connectivity probes and diag.
+  const _restUrl = SUPABASE_URL + '/rest/v1/triage_state?select=data&id=eq.main';
+  const _restRoot = SUPABASE_URL + '/rest/v1/';
+
+  function _captureError(e) {
+    if (!e) return { name: null, cls: null, msg: 'null' };
+    return {
+      name: (e.name || null),
+      cls:  (e.constructor && e.constructor.name) || null,
+      msg:  String(e && e.message || e),
+    };
+  }
+
+  // Block auto-pushes when local state has not been verified against Supabase
+  // this session AND looks suspiciously stale. Prevents a phone holding seed
+  // data from overwriting real Supabase state once the network unblocks.
+  function shouldBlockAutoPush() {
+    if (_sync.lastFetchOk === true) return null;                  // fetched OK → trust local
+    if (_sync.lastPushOk === true)  return null;                  // already pushed OK this session
+    const snap = _sync.localSnapshot;
+    if (!snap || !snap.latestUpdatedAt) {
+      return 'No verified Supabase fetch this session and local has no timestamp — refusing auto-push.';
+    }
+    const ageDays = (Date.now() - snap.latestUpdatedAt) / 86400000;
+    if (ageDays > 7) {
+      return 'Local state is ' + Math.round(ageDays) + 'd old and no successful Supabase fetch this session — refusing auto-push.';
+    }
+    return null;
+  }
 
   function _stateSummary(data) {
     if (!data || !Array.isArray(data.items)) return { items: 0, latestUpdatedAt: null, bytes: 0 };
@@ -224,6 +263,22 @@
       renderSyncIndicator();
       return false;
     }
+
+    // Trust guard — never auto-push state that we can't prove is current.
+    if (!manual) {
+      const blocked = shouldBlockAutoPush();
+      if (blocked) {
+        _sync.pushBlocked       = true;
+        _sync.pushBlockedReason = blocked;
+        _sync.state             = 'error';
+        renderSyncIndicator();
+        console.warn('[triage] Auto-push blocked:', blocked);
+        return false;
+      }
+    }
+    _sync.pushBlocked       = false;
+    _sync.pushBlockedReason = null;
+
     _sync.state = 'syncing';
     renderSyncIndicator();
 
@@ -239,11 +294,12 @@
           .from('triage_state')
           .upsert({ id: 'main', data, updated_at: new Date().toISOString() });
         if (error) throw error;
-        _sync.lastPushAt   = Date.now();
-        _sync.lastPushOk   = true;
-        _sync.lastPushError = null;
-        _sync.state        = 'synced';
-        _sync.lastFetchAt  = _sync.lastFetchAt || Date.now(); // treat a successful push as a known-fresh moment
+        _sync.lastPushAt      = Date.now();
+        _sync.lastPushOk      = true;
+        _sync.lastPushError   = null;
+        _sync.lastPushErrorName = null;
+        _sync.state           = 'synced';
+        _sync.lastFetchAt     = _sync.lastFetchAt || Date.now();
         renderSyncIndicator();
         console.info('[triage] Supabase push ok (attempt ' + attempt + ').');
         return true;
@@ -255,12 +311,14 @@
         }
       }
     }
-    _sync.lastPushAt    = Date.now();
-    _sync.lastPushOk    = false;
-    _sync.lastPushError = String(lastErr && lastErr.message || lastErr);
-    _sync.state         = 'error';
+    const cap = _captureError(lastErr);
+    _sync.lastPushAt        = Date.now();
+    _sync.lastPushOk        = false;
+    _sync.lastPushError     = cap.msg;
+    _sync.lastPushErrorName = cap.name + (cap.cls && cap.cls !== cap.name ? ' / ' + cap.cls : '');
+    _sync.state             = 'error';
     renderSyncIndicator();
-    if (manual) showToast('Sync error — see Diagnostics for details', 3500);
+    if (manual) showToast('Push failed — see Diagnostics for details', 3500);
     return false;
   }
 
@@ -335,6 +393,7 @@
     try { storedBytes = (localStorage.getItem(STORAGE_KEY) || '').length; } catch (e) {}
     return {
       now:              new Date().toISOString(),
+      appVersion:       APP_VERSION,
       userAgent:        navigator.userAgent,
       online:           navigator.onLine,
       visibility:       document.visibilityState,
@@ -354,9 +413,11 @@
         parseError:     _sync.localParseError || null,
       },
       fetch: {
+        url:            _sync.lastFetchUrl,
         lastAt:         _sync.lastFetchAt ? new Date(_sync.lastFetchAt).toISOString() : null,
         ok:             _sync.lastFetchOk,
         error:          _sync.lastFetchError,
+        errorType:      _sync.lastFetchErrorName,
         items:          _sync.lastFetchSummary ? _sync.lastFetchSummary.items : null,
         latestUpdated:  _sync.lastFetchSummary && _sync.lastFetchSummary.latestUpdatedAt
                           ? new Date(_sync.lastFetchSummary.latestUpdatedAt).toISOString() : null,
@@ -366,9 +427,13 @@
         lastAt:         _sync.lastPushAt ? new Date(_sync.lastPushAt).toISOString() : null,
         ok:             _sync.lastPushOk,
         error:          _sync.lastPushError,
+        errorType:      _sync.lastPushErrorName,
         attempts:       _sync.pushAttempts,
         retries:        _sync.pushRetries,
+        blocked:        _sync.pushBlocked,
+        blockedReason:  _sync.pushBlockedReason,
       },
+      connectivity:     _sync.connectivity,
       realtime: {
         status:         _sync.realtimeStatus,
         eventsReceived: _sync.realtimeEvents,
@@ -402,9 +467,25 @@
     const row = (k, v) => `<div class="diag-row"><span class="diag-key">${escapeHtml(k)}</span><span class="diag-val">${escapeHtml(String(v == null ? '—' : v))}</span></div>`;
     const section = (title, rows) => `<div class="diag-section"><h4>${escapeHtml(title)}</h4>${rows.join('')}</div>`;
 
+    let connHtml = '';
+    if (d.connectivity && d.connectivity.results) {
+      const r = d.connectivity.results;
+      const probeRow = (name, p) => row(name, p
+        ? (p.ok ? `${p.status} · ${p.ms}ms` : `FAIL · ${p.errorName || ''} · ${p.error || ''}`)
+        : '—');
+      connHtml = section('CONNECTIVITY PROBE ' + (d.connectivity.at ? '(' + d.connectivity.at + ')' : ''), [
+        probeRow('cloudflare 1.1.1.1', r.cloudflareTrace),
+        probeRow('jsdelivr CDN',       r.jsdelivr),
+        probeRow('supabase REST root', r.supabaseRoot),
+        probeRow('supabase REST authed', r.supabaseAuthed),
+        probeRow('supabase realtime',  r.supabaseRealtime),
+      ]);
+    }
+
     out.innerHTML = `
       ${section('STATUS', [
         row('Sync state',   d.state),
+        row('App version',  d.appVersion),
         row('Online',       d.online),
         row('Visibility',   d.visibility),
         row('Time',         d.now),
@@ -424,20 +505,26 @@
         row('Parse error',        d.local.parseError),
       ])}
       ${section('LAST FETCH FROM SUPABASE', [
+        row('URL',             d.fetch.url),
         row('At',              d.fetch.lastAt),
         row('OK',              d.fetch.ok == null ? '—' : (d.fetch.ok ? 'yes' : 'NO')),
         row('Error',           d.fetch.error),
+        row('Error type',      d.fetch.errorType),
         row('Items',           d.fetch.items),
         row('Latest updatedAt',d.fetch.latestUpdated),
         row('Bytes',           d.fetch.bytes),
       ])}
       ${section('LAST PUSH TO SUPABASE', [
-        row('At',         d.push.lastAt),
-        row('OK',         d.push.ok == null ? '—' : (d.push.ok ? 'yes' : 'NO')),
-        row('Error',      d.push.error),
-        row('Attempts',   d.push.attempts),
-        row('Retries',    d.push.retries),
+        row('At',          d.push.lastAt),
+        row('OK',          d.push.ok == null ? '—' : (d.push.ok ? 'yes' : 'NO')),
+        row('Error',       d.push.error),
+        row('Error type',  d.push.errorType),
+        row('Attempts',    d.push.attempts),
+        row('Retries',     d.push.retries),
+        row('Auto-blocked',d.push.blocked ? 'YES' : 'no'),
+        row('Block reason',d.push.blockedReason),
       ])}
+      ${connHtml}
       ${section('REALTIME', [
         row('Channel status', d.realtime.status),
         row('Events received',d.realtime.eventsReceived),
@@ -454,6 +541,41 @@
     const ok = await pushToSupabase(buildStateData(), { manual: true });
     if (ok) showToast('Pushed to Supabase ✓', 1800);
     renderDiagPanel();
+  }
+
+  async function _probe(url, opts) {
+    const start = Date.now();
+    try {
+      const r = await fetch(url, opts || {});
+      return { url, ok: true, status: r.status, ms: Date.now() - start };
+    } catch (e) {
+      const cap = _captureError(e);
+      return { url, ok: false, status: null, ms: Date.now() - start, errorName: cap.name, errorClass: cap.cls, error: cap.msg };
+    }
+  }
+
+  // Probe several endpoints to localize the failure layer:
+  //   - third-party HTTPS (cloudflare CDN trace): proves the network at all
+  //   - jsdelivr.net (already known good — SDK loaded from here)
+  //   - Supabase REST root (no auth → expect 401 if reachable)
+  //   - Supabase REST authed endpoint (apikey header)
+  //   - Supabase WebSocket endpoint (probe via fetch upgrade attempt — limited info but captures error class)
+  async function testConnectivity() {
+    showToast('Probing endpoints…', 1500);
+    const results = {};
+    results.cloudflareTrace = await _probe('https://1.1.1.1/cdn-cgi/trace', { cache: 'no-store' });
+    results.jsdelivr        = await _probe('https://cdn.jsdelivr.net/favicon.ico', { cache: 'no-store' });
+    results.supabaseRoot    = await _probe(SUPABASE_URL + '/rest/v1/', { cache: 'no-store' });
+    results.supabaseAuthed  = await _probe(_restUrl, {
+      cache: 'no-store',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
+    });
+    results.supabaseRealtime = await _probe(SUPABASE_URL + '/realtime/v1/api/tenants/health', { cache: 'no-store' });
+
+    _sync.connectivity = { at: new Date().toISOString(), results };
+    console.info('[triage] connectivity probe:', _sync.connectivity);
+    renderDiagPanel();
+    showToast('Probe complete — see Connectivity', 2000);
   }
 
   async function forceFetchNow() {
@@ -558,6 +680,7 @@
     let loadedFromSupabase = false;
     if (supabaseClient) {
       _sync.state = 'syncing';
+      _sync.lastFetchUrl = _restUrl;
       renderSyncIndicator();
       try {
         const { data, error } = await supabaseClient
@@ -567,29 +690,34 @@
           .single();
         _sync.lastFetchAt = Date.now();
         if (error) {
-          _sync.lastFetchOk    = false;
-          _sync.lastFetchError = String(error.message || error);
-          _sync.state          = 'error';
+          const cap = _captureError(error);
+          _sync.lastFetchOk        = false;
+          _sync.lastFetchError     = cap.msg;
+          _sync.lastFetchErrorName = cap.name + (cap.cls && cap.cls !== cap.name ? ' / ' + cap.cls : '');
+          _sync.state              = 'error';
           console.warn('[triage] Supabase load returned error:', error);
         } else if (data?.data) {
           restoreStateFromData(data.data);
           try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data.data)); } catch(e) {}
           loadedFromSupabase = true;
-          _sync.lastFetchOk      = true;
-          _sync.lastFetchError   = null;
-          _sync.lastFetchSummary = _stateSummary(data.data);
-          _sync.state            = 'synced';
+          _sync.lastFetchOk        = true;
+          _sync.lastFetchError     = null;
+          _sync.lastFetchErrorName = null;
+          _sync.lastFetchSummary   = _stateSummary(data.data);
+          _sync.state              = 'synced';
           console.info('[triage] Loaded state from Supabase:', _sync.lastFetchSummary);
         } else {
-          _sync.lastFetchOk    = false;
-          _sync.lastFetchError = 'Supabase returned no row for id=main';
+          _sync.lastFetchOk        = false;
+          _sync.lastFetchError     = 'Supabase returned no row for id=main';
           console.warn('[triage]', _sync.lastFetchError);
         }
       } catch (e) {
-        _sync.lastFetchAt    = Date.now();
-        _sync.lastFetchOk    = false;
-        _sync.lastFetchError = String(e && e.message || e);
-        _sync.state          = 'error';
+        const cap = _captureError(e);
+        _sync.lastFetchAt        = Date.now();
+        _sync.lastFetchOk        = false;
+        _sync.lastFetchError     = cap.msg;
+        _sync.lastFetchErrorName = cap.name + (cap.cls && cap.cls !== cap.name ? ' / ' + cap.cls : '');
+        _sync.state              = 'error';
         console.warn('[triage] Supabase load threw:', e);
       }
       renderSyncIndicator();
@@ -3025,6 +3153,8 @@
     if (diagRefresh) diagRefresh.addEventListener('click', forceFetchNow);
     const diagPush = document.getElementById('diag-push-btn');
     if (diagPush) diagPush.addEventListener('click', forcePushNow);
+    const diagProbe = document.getElementById('diag-probe-btn');
+    if (diagProbe) diagProbe.addEventListener('click', testConnectivity);
     const diagCopy = document.getElementById('diag-copy-btn');
     if (diagCopy) diagCopy.addEventListener('click', copyDiagToClipboard);
     const diagPanel = document.getElementById('diag-panel');
