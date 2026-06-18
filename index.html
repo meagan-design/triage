@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260618d">
 </head>
 <body class="app-locked">
 
@@ -350,10 +350,26 @@
   <!-- Toast -->
   <div id="toast" class="toast" hidden></div>
 
-  <!-- Sync indicator -->
-  <div id="sync-indicator" class="sync-indicator">
+  <!-- Sync indicator (persistent, tappable for diagnostics) -->
+  <button id="sync-indicator" class="sync-indicator" type="button" aria-label="Open sync diagnostics">
     <span class="sync-dot" id="sync-dot"></span>
-    <span id="sync-label">Saved</span>
+    <span id="sync-label">Loading…</span>
+  </button>
+
+  <!-- Sync diagnostics panel -->
+  <div id="diag-panel" class="diag-panel" hidden>
+    <div class="diag-card">
+      <header class="diag-header">
+        <h3>Sync diagnostics</h3>
+        <button id="diag-close-btn" class="modal-close-btn" aria-label="Close">&times;</button>
+      </header>
+      <div id="diag-content" class="diag-content"></div>
+      <footer class="diag-footer">
+        <button id="diag-refresh-btn" class="btn-secondary">↻ Fetch now</button>
+        <button id="diag-push-btn"    class="btn-secondary">↑ Push now</button>
+        <button id="diag-copy-btn"    class="btn-secondary">Copy</button>
+      </footer>
+    </div>
   </div>
 
   <!-- Password Gate -->
@@ -376,6 +392,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=20260618d"></script>
 </body>
 </html>

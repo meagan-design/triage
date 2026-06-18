@@ -119,48 +119,149 @@
   let supabaseClient = null;
   let _supabaseSaveTimer = null;
 
+  // Single source of truth for everything sync-related. Drives the persistent
+  // indicator and the in-page diagnostic panel. Captured here so we don't need
+  // devtools open on phone to see what is actually happening.
+  const _sync = {
+    state:            'init',           // init | syncing | synced | error | local-only | offline
+    sdkLoaded:        null,             // window.supabase present?
+    clientReady:      false,            // createClient succeeded
+    initError:        null,
+    lastFetchAt:      null,             // ms epoch
+    lastFetchOk:      null,             // true | false | null
+    lastFetchError:   null,
+    lastFetchSummary: null,             // { items, latestUpdatedAt, bytes, fromVisibility }
+    lastPushAt:       null,
+    lastPushOk:       null,
+    lastPushError:    null,
+    pushAttempts:     0,
+    pushRetries:      0,
+    realtimeStatus:   null,
+    realtimeEvents:   0,
+    realtimeApplied:  0,
+    realtimeSkipped:  0,
+    localSnapshot:    null,             // captured at boot
+  };
+
+  function _stateSummary(data) {
+    if (!data || !Array.isArray(data.items)) return { items: 0, latestUpdatedAt: null, bytes: 0 };
+    let latest = 0;
+    for (const it of data.items) {
+      if (it && typeof it.updatedAt === 'number' && it.updatedAt > latest) latest = it.updatedAt;
+    }
+    let bytes = 0;
+    try { bytes = JSON.stringify(data).length; } catch (e) {}
+    return { items: data.items.length, latestUpdatedAt: latest || null, bytes };
+  }
+
   function initSupabase() {
+    _sync.sdkLoaded = !!(window.supabase && typeof window.supabase.createClient === 'function');
+    if (!_sync.sdkLoaded) {
+      _sync.state = 'local-only';
+      _sync.initError = 'supabase-js SDK did not load (CDN blocked or network issue)';
+      console.warn('[triage]', _sync.initError);
+      return;
+    }
     if (
       SUPABASE_URL  === 'REPLACE_WITH_YOUR_SUPABASE_URL' ||
       SUPABASE_ANON_KEY === 'REPLACE_WITH_YOUR_SUPABASE_ANON_KEY'
     ) {
-      console.info('Supabase not configured — running in local-only mode.');
+      _sync.state = 'local-only';
+      _sync.initError = 'Supabase not configured';
+      console.info('[triage]', _sync.initError);
       return;
     }
     try {
       supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      _sync.clientReady = true;
+      console.info('[triage] Supabase client created.');
     } catch (e) {
-      console.warn('Supabase init failed:', e);
+      _sync.state = 'local-only';
+      _sync.initError = String(e && e.message || e);
+      console.warn('[triage] Supabase init failed:', e);
     }
   }
 
-  function showSyncIndicator(syncing) {
-    const el   = document.getElementById('sync-indicator');
-    const dot  = document.getElementById('sync-dot');
-    const lbl  = document.getElementById('sync-label');
-    if (!el) return;
-    dot.className  = 'sync-dot' + (syncing ? ' syncing' : '');
-    lbl.textContent = syncing ? 'Syncing…' : 'Saved';
+  function renderSyncIndicator() {
+    const el  = document.getElementById('sync-indicator');
+    const dot = document.getElementById('sync-dot');
+    const lbl = document.getElementById('sync-label');
+    if (!el || !dot || !lbl) return;
+
     el.classList.add('visible');
-    clearTimeout(el._hideTimer);
-    if (!syncing) {
-      el._hideTimer = setTimeout(() => el.classList.remove('visible'), 2000);
+    el.dataset.state = _sync.state;
+    dot.className = 'sync-dot sync-dot--' + _sync.state;
+
+    let txt;
+    switch (_sync.state) {
+      case 'syncing':    txt = 'Syncing…'; break;
+      case 'synced':     txt = 'Synced' + (_sync.lastFetchAt ? ' · ' + _agoText(_sync.lastFetchAt) : ''); break;
+      case 'error':      txt = 'Sync error · tap'; break;
+      case 'local-only': txt = 'Local only · tap'; break;
+      case 'offline':    txt = 'Offline · tap'; break;
+      default:           txt = 'Loading…';
     }
+    lbl.textContent = txt;
   }
 
-  async function pushToSupabase(data) {
-    if (!supabaseClient) return;
-    showSyncIndicator(true);
-    try {
-      const { error } = await supabaseClient
-        .from('triage_state')
-        .upsert({ id: 'main', data, updated_at: new Date().toISOString() });
-      if (error) throw error;
-      showSyncIndicator(false);
-    } catch (e) {
-      console.warn('Supabase push failed:', e);
-      showSyncIndicator(false);
+  function _agoText(ts) {
+    const diff = Math.max(0, Date.now() - ts);
+    const s = Math.floor(diff / 1000);
+    if (s < 60)    return s + 's ago';
+    const m = Math.floor(s / 60);
+    if (m < 60)    return m + 'm ago';
+    const h = Math.floor(m / 60);
+    if (h < 24)    return h + 'h ago';
+    return Math.floor(h / 24) + 'd ago';
+  }
+
+  // Re-render the indicator every 15s so the "Xm ago" text stays fresh.
+  setInterval(() => { if (_sync.state === 'synced') renderSyncIndicator(); }, 15000);
+
+  async function pushToSupabase(data, { manual = false } = {}) {
+    if (!supabaseClient) {
+      _sync.state = 'local-only';
+      renderSyncIndicator();
+      return false;
     }
+    _sync.state = 'syncing';
+    renderSyncIndicator();
+
+    const maxAttempts = 3;
+    _sync.pushAttempts = 0;
+    let lastErr = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      _sync.pushAttempts = attempt;
+      if (attempt > 1) _sync.pushRetries++;
+      try {
+        const { error } = await supabaseClient
+          .from('triage_state')
+          .upsert({ id: 'main', data, updated_at: new Date().toISOString() });
+        if (error) throw error;
+        _sync.lastPushAt   = Date.now();
+        _sync.lastPushOk   = true;
+        _sync.lastPushError = null;
+        _sync.state        = 'synced';
+        _sync.lastFetchAt  = _sync.lastFetchAt || Date.now(); // treat a successful push as a known-fresh moment
+        renderSyncIndicator();
+        console.info('[triage] Supabase push ok (attempt ' + attempt + ').');
+        return true;
+      } catch (e) {
+        lastErr = e;
+        console.warn('[triage] Supabase push attempt ' + attempt + ' failed:', e);
+        if (attempt < maxAttempts) {
+          await new Promise(r => setTimeout(r, 250 * Math.pow(2, attempt - 1))); // 250, 500
+        }
+      }
+    }
+    _sync.lastPushAt    = Date.now();
+    _sync.lastPushOk    = false;
+    _sync.lastPushError = String(lastErr && lastErr.message || lastErr);
+    _sync.state         = 'error';
+    renderSyncIndicator();
+    if (manual) showToast('Sync error — see Diagnostics for details', 3500);
+    return false;
   }
 
   function scheduleSupabasePush(data) {
@@ -178,18 +279,36 @@
         table:  'triage_state',
         filter: 'id=eq.main',
       }, payload => {
-        if (!payload.new?.data) return;
-        // Don't clobber active editing
-        if (document.querySelector('dialog[open]')) return;
+        _sync.realtimeEvents++;
+        if (!payload.new?.data) {
+          _sync.realtimeSkipped++;
+          console.info('[triage] realtime event missing data, skipped.');
+          renderSyncIndicator();
+          return;
+        }
+        if (document.querySelector('dialog[open]')) {
+          _sync.realtimeSkipped++;
+          console.info('[triage] realtime event skipped: dialog open.');
+          renderSyncIndicator();
+          return;
+        }
         restoreStateFromData(payload.new.data);
         applyMigrations();
-        // Cache locally
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload.new.data)); } catch(e) {}
+        _sync.realtimeApplied++;
+        _sync.lastFetchAt      = Date.now();
+        _sync.lastFetchOk      = true;
+        _sync.lastFetchSummary = _stateSummary(payload.new.data);
+        _sync.state            = 'synced';
+        renderSyncIndicator();
         render();
         showToast('Board updated from another device', 2000);
+        console.info('[triage] realtime applied:', _sync.lastFetchSummary);
       })
       .subscribe(status => {
+        _sync.realtimeStatus = status;
         console.info('[triage] realtime status:', status);
+        renderSyncIndicator();
       });
   }
 
@@ -197,10 +316,172 @@
     // Mobile Safari (and any background-suspended tab) can lose the realtime
     // WebSocket. Re-fetch from Supabase when the tab returns to foreground.
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') refreshFromSupabase();
+      if (document.visibilityState === 'visible') refreshFromSupabase({ fromVisibility: true });
     });
     // Also refresh on focus, as a belt-and-suspenders for desktop window switches.
-    window.addEventListener('focus', () => refreshFromSupabase());
+    window.addEventListener('focus', () => refreshFromSupabase({ fromVisibility: true }));
+  }
+
+  /* ==========================================================
+     3a. DIAGNOSTIC PANEL
+     ----------------------------------------------------------
+     A visible, on-device diagnostic. Tap the sync indicator to open it.
+     Shows real numbers (not console hopes) so phone users without devtools
+     can see exactly why sync isn't behaving.
+  ========================================================== */
+
+  function buildDiagSnapshot() {
+    let storedBytes = 0;
+    try { storedBytes = (localStorage.getItem(STORAGE_KEY) || '').length; } catch (e) {}
+    return {
+      now:              new Date().toISOString(),
+      userAgent:        navigator.userAgent,
+      online:           navigator.onLine,
+      visibility:       document.visibilityState,
+      supabase: {
+        sdkLoaded:      _sync.sdkLoaded,
+        clientReady:    _sync.clientReady,
+        initError:      _sync.initError,
+        url:            SUPABASE_URL.replace(/(https?:\/\/)([^.]{6}).*?(\.supabase\.co)/, '$1$2…$3'),
+        anonKeyLen:     SUPABASE_ANON_KEY.length,
+      },
+      local: {
+        items:          _sync.localSnapshot ? _sync.localSnapshot.items : null,
+        latestUpdated:  _sync.localSnapshot && _sync.localSnapshot.latestUpdatedAt
+                          ? new Date(_sync.localSnapshot.latestUpdatedAt).toISOString() : null,
+        storedBytes,
+        currentItems:   state.items.length,
+      },
+      fetch: {
+        lastAt:         _sync.lastFetchAt ? new Date(_sync.lastFetchAt).toISOString() : null,
+        ok:             _sync.lastFetchOk,
+        error:          _sync.lastFetchError,
+        items:          _sync.lastFetchSummary ? _sync.lastFetchSummary.items : null,
+        latestUpdated:  _sync.lastFetchSummary && _sync.lastFetchSummary.latestUpdatedAt
+                          ? new Date(_sync.lastFetchSummary.latestUpdatedAt).toISOString() : null,
+        bytes:          _sync.lastFetchSummary ? _sync.lastFetchSummary.bytes : null,
+      },
+      push: {
+        lastAt:         _sync.lastPushAt ? new Date(_sync.lastPushAt).toISOString() : null,
+        ok:             _sync.lastPushOk,
+        error:          _sync.lastPushError,
+        attempts:       _sync.pushAttempts,
+        retries:        _sync.pushRetries,
+      },
+      realtime: {
+        status:         _sync.realtimeStatus,
+        eventsReceived: _sync.realtimeEvents,
+        applied:        _sync.realtimeApplied,
+        skipped:        _sync.realtimeSkipped,
+      },
+      state: _sync.state,
+    };
+  }
+
+  function openDiagPanel() {
+    const panel = document.getElementById('diag-panel');
+    if (!panel) return;
+    panel.hidden = false;
+    panel.classList.add('visible');
+    renderDiagPanel();
+  }
+
+  function closeDiagPanel() {
+    const panel = document.getElementById('diag-panel');
+    if (!panel) return;
+    panel.classList.remove('visible');
+    panel.hidden = true;
+  }
+
+  function renderDiagPanel() {
+    const out = document.getElementById('diag-content');
+    if (!out) return;
+    const d = buildDiagSnapshot();
+
+    const row = (k, v) => `<div class="diag-row"><span class="diag-key">${escapeHtml(k)}</span><span class="diag-val">${escapeHtml(String(v == null ? '—' : v))}</span></div>`;
+    const section = (title, rows) => `<div class="diag-section"><h4>${escapeHtml(title)}</h4>${rows.join('')}</div>`;
+
+    out.innerHTML = `
+      ${section('STATUS', [
+        row('Sync state',   d.state),
+        row('Online',       d.online),
+        row('Visibility',   d.visibility),
+        row('Time',         d.now),
+      ])}
+      ${section('SUPABASE CLIENT', [
+        row('SDK loaded',   d.supabase.sdkLoaded === true ? 'yes' : d.supabase.sdkLoaded === false ? 'NO (CDN blocked?)' : '—'),
+        row('Client ready', d.supabase.clientReady ? 'yes' : 'no'),
+        row('Init error',   d.supabase.initError),
+        row('URL',          d.supabase.url),
+        row('Anon key len', d.supabase.anonKeyLen),
+      ])}
+      ${section('LOCAL (localStorage)', [
+        row('Items at boot',      d.local.items),
+        row('Latest updatedAt',   d.local.latestUpdated),
+        row('Stored bytes',       d.local.storedBytes),
+        row('Items in memory',    d.local.currentItems),
+      ])}
+      ${section('LAST FETCH FROM SUPABASE', [
+        row('At',              d.fetch.lastAt),
+        row('OK',              d.fetch.ok == null ? '—' : (d.fetch.ok ? 'yes' : 'NO')),
+        row('Error',           d.fetch.error),
+        row('Items',           d.fetch.items),
+        row('Latest updatedAt',d.fetch.latestUpdated),
+        row('Bytes',           d.fetch.bytes),
+      ])}
+      ${section('LAST PUSH TO SUPABASE', [
+        row('At',         d.push.lastAt),
+        row('OK',         d.push.ok == null ? '—' : (d.push.ok ? 'yes' : 'NO')),
+        row('Error',      d.push.error),
+        row('Attempts',   d.push.attempts),
+        row('Retries',    d.push.retries),
+      ])}
+      ${section('REALTIME', [
+        row('Channel status', d.realtime.status),
+        row('Events received',d.realtime.eventsReceived),
+        row('Applied',        d.realtime.applied),
+        row('Skipped',        d.realtime.skipped),
+      ])}
+    `;
+    // Stash a copy for the Copy button
+    out._lastSnapshot = d;
+  }
+
+  async function forcePushNow() {
+    clearTimeout(_supabaseSaveTimer);
+    const ok = await pushToSupabase(buildStateData(), { manual: true });
+    if (ok) showToast('Pushed to Supabase ✓', 1800);
+    renderDiagPanel();
+  }
+
+  async function forceFetchNow() {
+    await refreshFromSupabase({ manual: true });
+    renderDiagPanel();
+  }
+
+  function copyDiagToClipboard() {
+    const out = document.getElementById('diag-content');
+    const snap = out && out._lastSnapshot ? out._lastSnapshot : buildDiagSnapshot();
+    const text = JSON.stringify(snap, null, 2);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => showToast('Diagnostics copied', 1800))
+        .catch(() => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+  }
+
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); showToast('Diagnostics copied', 1800); }
+    catch (e) { showToast('Copy failed — long-press to copy from panel', 2500); }
+    document.body.removeChild(ta);
   }
 
   /* ==========================================================
@@ -248,30 +529,57 @@
     // 1. Restore from localStorage first so UI can render immediately
     const cached = localStorage.getItem(STORAGE_KEY);
     let hasLocalData = false;
+    let localParsed  = null;
     if (cached) {
-      try { restoreStateFromData(JSON.parse(cached)); hasLocalData = true; } catch(e) {}
+      try { localParsed = JSON.parse(cached); restoreStateFromData(localParsed); hasLocalData = true; } catch(e) {
+        console.warn('[triage] localStorage parse failed:', e);
+      }
     }
+    _sync.localSnapshot = localParsed ? _stateSummary(localParsed) : { items: 0, latestUpdatedAt: null, bytes: cached ? cached.length : 0 };
+    console.info('[triage] local snapshot at boot:', _sync.localSnapshot);
 
     // 2. Fetch from Supabase (authoritative, most recent across devices)
     let loadedFromSupabase = false;
     if (supabaseClient) {
+      _sync.state = 'syncing';
+      renderSyncIndicator();
       try {
         const { data, error } = await supabaseClient
           .from('triage_state')
           .select('data')
           .eq('id', 'main')
           .single();
-        if (!error && data?.data) {
+        _sync.lastFetchAt = Date.now();
+        if (error) {
+          _sync.lastFetchOk    = false;
+          _sync.lastFetchError = String(error.message || error);
+          _sync.state          = 'error';
+          console.warn('[triage] Supabase load returned error:', error);
+        } else if (data?.data) {
           restoreStateFromData(data.data);
           try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data.data)); } catch(e) {}
           loadedFromSupabase = true;
-          console.info('[triage] Loaded state from Supabase.');
-        } else if (error) {
-          console.warn('[triage] Supabase load returned error:', error);
+          _sync.lastFetchOk      = true;
+          _sync.lastFetchError   = null;
+          _sync.lastFetchSummary = _stateSummary(data.data);
+          _sync.state            = 'synced';
+          console.info('[triage] Loaded state from Supabase:', _sync.lastFetchSummary);
+        } else {
+          _sync.lastFetchOk    = false;
+          _sync.lastFetchError = 'Supabase returned no row for id=main';
+          console.warn('[triage]', _sync.lastFetchError);
         }
       } catch (e) {
-        console.warn('[triage] Supabase load threw, using local data:', e);
+        _sync.lastFetchAt    = Date.now();
+        _sync.lastFetchOk    = false;
+        _sync.lastFetchError = String(e && e.message || e);
+        _sync.state          = 'error';
+        console.warn('[triage] Supabase load threw:', e);
       }
+      renderSyncIndicator();
+    } else {
+      _sync.state = 'local-only';
+      renderSyncIndicator();
     }
 
     // 3. Fresh install (nothing local, nothing remote)
@@ -281,37 +589,74 @@
       saveState();
     }
 
-    // 4. Always apply migrations — even after a successful Supabase load,
-    //    so legacy values from older clients can't slip through.
+    // 4. Always apply migrations
     applyMigrations();
   }
 
-  // Used by visibilitychange handler to pick up writes from other devices
-  // when the realtime subscription has been suspended (mobile background tabs).
-  async function refreshFromSupabase() {
-    if (!supabaseClient) return;
-    // Don't clobber an active edit
-    if (document.querySelector('dialog[open]')) return;
+  async function refreshFromSupabase({ manual = false, fromVisibility = false } = {}) {
+    if (!supabaseClient) {
+      if (manual) showToast('Supabase unavailable — see Diagnostics', 2500);
+      return false;
+    }
+    if (document.querySelector('dialog[open]') && !manual) {
+      console.info('[triage] refresh skipped: dialog open.');
+      return false;
+    }
+    _sync.state = 'syncing';
+    renderSyncIndicator();
     try {
       const { data, error } = await supabaseClient
         .from('triage_state')
         .select('data')
         .eq('id', 'main')
         .single();
-      if (error) { console.warn('[triage] visibility refresh error:', error); return; }
-      if (!data?.data) return;
+      _sync.lastFetchAt = Date.now();
+      if (error) {
+        _sync.lastFetchOk    = false;
+        _sync.lastFetchError = String(error.message || error);
+        _sync.state          = 'error';
+        renderSyncIndicator();
+        console.warn('[triage] refresh error:', error);
+        if (manual) showToast('Fetch failed — see Diagnostics', 2500);
+        return false;
+      }
+      if (!data?.data) {
+        _sync.lastFetchOk    = false;
+        _sync.lastFetchError = 'No row at id=main';
+        _sync.state          = 'error';
+        renderSyncIndicator();
+        return false;
+      }
+      _sync.lastFetchOk      = true;
+      _sync.lastFetchError   = null;
+      _sync.lastFetchSummary = Object.assign(_stateSummary(data.data), { fromVisibility });
+      _sync.state            = 'synced';
 
       const remoteJson = JSON.stringify(data.data);
       const localJson  = localStorage.getItem(STORAGE_KEY);
-      if (remoteJson === localJson) return; // already up to date
-
+      if (remoteJson === localJson) {
+        renderSyncIndicator();
+        console.info('[triage] refresh: remote === local, no change.');
+        if (manual) showToast('Already up to date', 1800);
+        return true;
+      }
       restoreStateFromData(data.data);
       try { localStorage.setItem(STORAGE_KEY, remoteJson); } catch(e) {}
       applyMigrations();
       render();
-      console.info('[triage] State refreshed from Supabase on visibility change.');
+      renderSyncIndicator();
+      console.info('[triage] Refreshed from Supabase:', _sync.lastFetchSummary);
+      if (manual) showToast('Refreshed from Supabase', 1800);
+      return true;
     } catch (e) {
-      console.warn('[triage] visibility refresh threw:', e);
+      _sync.lastFetchAt    = Date.now();
+      _sync.lastFetchOk    = false;
+      _sync.lastFetchError = String(e && e.message || e);
+      _sync.state          = 'error';
+      renderSyncIndicator();
+      console.warn('[triage] refresh threw:', e);
+      if (manual) showToast('Fetch threw — see Diagnostics', 2500);
+      return false;
     }
   }
 
@@ -2636,6 +2981,34 @@
     if (nextStepInput) {
       nextStepInput.addEventListener('input', updateVagueHelper);
     }
+
+    /* --- Sync indicator → opens diagnostic panel --- */
+    const syncIndicator = document.getElementById('sync-indicator');
+    if (syncIndicator) {
+      syncIndicator.addEventListener('click', e => {
+        e.preventDefault();
+        openDiagPanel();
+      });
+    }
+    const diagClose = document.getElementById('diag-close-btn');
+    if (diagClose) diagClose.addEventListener('click', closeDiagPanel);
+    const diagRefresh = document.getElementById('diag-refresh-btn');
+    if (diagRefresh) diagRefresh.addEventListener('click', forceFetchNow);
+    const diagPush = document.getElementById('diag-push-btn');
+    if (diagPush) diagPush.addEventListener('click', forcePushNow);
+    const diagCopy = document.getElementById('diag-copy-btn');
+    if (diagCopy) diagCopy.addEventListener('click', copyDiagToClipboard);
+    const diagPanel = document.getElementById('diag-panel');
+    if (diagPanel) {
+      diagPanel.addEventListener('click', e => {
+        if (e.target === diagPanel) closeDiagPanel();
+      });
+    }
+
+    /* --- URL hash trigger for diagnostics (works on mobile without devtools) --- */
+    if (location.hash === '#diag') {
+      setTimeout(openDiagPanel, 400);
+    }
   }
 
   /* ==========================================================
@@ -2804,6 +3177,7 @@
 
   async function init() {
     initSupabase();
+    renderSyncIndicator();
     await loadState();
     populateFormSelects();
     render();
@@ -2812,6 +3186,7 @@
     setupEvents();
     setupRealtimeSync();
     setupVisibilityRefresh();
+    renderSyncIndicator();
 
     setTimeout(() => {
       document.getElementById('today')?.scrollIntoView({ behavior: 'smooth', block: 'start' });

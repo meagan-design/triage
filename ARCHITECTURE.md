@@ -270,6 +270,25 @@ A v1→v2 migration also exists (`migrateItem`) for items captured under the ori
 
 `setupVisibilityRefresh()` registers `visibilitychange` + `focus` listeners that call `refreshFromSupabase()` whenever the tab returns to the foreground. This guards against the realtime WebSocket being silently killed during mobile-Safari tab suspension. The refresh respects the dialog-open guard and short-circuits if remote state is byte-identical to local cache.
 
+### Sync state, push retry, and the diagnostic panel
+
+All sync facts are captured in a single `_sync` object — sync state, last fetch/push outcomes, realtime channel status, event counters, and snapshots of local + remote state.
+
+- **Persistent sync indicator** (bottom-right) shows current state: `Synced · 2m ago`, `Syncing…`, `Local only · tap`, or `Sync error · tap`. Color-coded dot. Tappable.
+- **Push retry** — `pushToSupabase` now retries up to 3 attempts with 250ms→500ms backoff. Surfaces failure as the `error` state on the indicator instead of falsely saying "Saved."
+- **Diagnostic panel** — tap the sync indicator (or load with `#diag` hash). Shows real numbers: supabase-js CDN load state, client init error if any, local item count + latest `updatedAt`, last fetch result + count + bytes, last push result + retry count, realtime channel status, and event counters. Includes "Fetch now" / "Push now" / "Copy" buttons. Designed to make a phone-side diagnosis possible without devtools.
+- **Cache-bust query strings** — `app.js?v=…` and `styles.css?v=…` in `index.html`. Bumped on each deploy to force browsers (notably Safari) to re-validate cached copies.
+
+### Sync-related logging
+
+All sync logs use the `[triage]` prefix:
+- `local snapshot at boot: { items, latestUpdatedAt, bytes }`
+- `Loaded state from Supabase: { items, latestUpdatedAt, bytes }`
+- `Refreshed from Supabase: { … fromVisibility: true/false }`
+- `Supabase push ok (attempt N)` / `Supabase push attempt N failed: <err>`
+- `realtime status: <SUBSCRIBED | CLOSED | CHANNEL_ERROR | TIMED_OUT>`
+- `realtime applied: { items, latestUpdatedAt }` / `realtime event skipped: <reason>`
+
 ---
 
 ## Password Gate
