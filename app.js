@@ -10,7 +10,7 @@
   ========================================================== */
 
   const STORAGE_KEY = 'triage_board_v4';
-  const APP_VERSION = '20260618f';
+  const APP_VERSION = '20260618g';
 
   /* ----------------------------------------------------------
      SUPABASE CONFIG
@@ -470,15 +470,21 @@
     let connHtml = '';
     if (d.connectivity && d.connectivity.results) {
       const r = d.connectivity.results;
-      const probeRow = (name, p) => row(name, p
-        ? (p.ok ? `${p.status} · ${p.ms}ms` : `FAIL · ${p.errorName || ''} · ${p.error || ''}`)
-        : '—');
+      const probeRow = (name, p) => {
+        if (!p) return row(name, '—');
+        if (p.ok) return row(name, `${p.status} · ${p.ms}ms`);
+        const tag = p.instantFail ? 'INSTANT-FAIL' : 'FAIL';
+        return row(name, `${tag} · ${p.ms}ms · ${p.errorName || '?'} · ${p.error || ''}`);
+      };
       connHtml = section('CONNECTIVITY PROBE ' + (d.connectivity.at ? '(' + d.connectivity.at + ')' : ''), [
-        probeRow('cloudflare 1.1.1.1', r.cloudflareTrace),
-        probeRow('jsdelivr CDN',       r.jsdelivr),
-        probeRow('supabase REST root', r.supabaseRoot),
-        probeRow('supabase REST authed', r.supabaseAuthed),
-        probeRow('supabase realtime',  r.supabaseRealtime),
+        probeRow('cloudflare 1.1.1.1',     r.cloudflareTrace),
+        probeRow('httpbin.org JSON',       r.httpbin),
+        probeRow('api.github.com JSON',    r.githubApi),
+        probeRow('supabase.com (home)',    r.supabaseHome),
+        probeRow('jsdelivr SDK origin',    r.jsdelivr),
+        probeRow('your supabase REST root', r.supabaseRoot),
+        probeRow('your supabase authed',    r.supabaseAuthed),
+        probeRow('your supabase realtime',  r.supabaseRealtime),
       ]);
     }
 
@@ -547,24 +553,31 @@
     const start = Date.now();
     try {
       const r = await fetch(url, opts || {});
-      return { url, ok: true, status: r.status, ms: Date.now() - start };
+      const ms = Date.now() - start;
+      return { url, ok: true, status: r.status, ms, instantFail: false };
     } catch (e) {
+      const ms = Date.now() - start;
       const cap = _captureError(e);
-      return { url, ok: false, status: null, ms: Date.now() - start, errorName: cap.name, errorClass: cap.cls, error: cap.msg };
+      // ms < 10 strongly suggests local rule / cached negative / refused immediately,
+      // not a real network attempt. Surface this so it's obvious in the panel.
+      return { url, ok: false, status: null, ms, instantFail: ms < 10, errorName: cap.name, errorClass: cap.cls, error: cap.msg };
     }
   }
 
-  // Probe several endpoints to localize the failure layer:
-  //   - third-party HTTPS (cloudflare CDN trace): proves the network at all
-  //   - jsdelivr.net (already known good — SDK loaded from here)
-  //   - Supabase REST root (no auth → expect 401 if reachable)
-  //   - Supabase REST authed endpoint (apikey header)
-  //   - Supabase WebSocket endpoint (probe via fetch upgrade attempt — limited info but captures error class)
+  // Probe a deliberately broad set so we can localize the failure layer:
+  //   - mainstream JSON APIs (httpbin, github)             → general HTTPS health
+  //   - cloudflare 1.1.1.1 trace                           → generic network round trip
+  //   - supabase.com marketing site                        → tests *.supabase.com hostname/IP class
+  //   - SDK origin (jsdelivr)                              → CDN we already use
+  //   - Supabase REST root, REST authed, Realtime health   → the actual failing endpoints
   async function testConnectivity() {
     showToast('Probing endpoints…', 1500);
     const results = {};
     results.cloudflareTrace = await _probe('https://1.1.1.1/cdn-cgi/trace', { cache: 'no-store' });
-    results.jsdelivr        = await _probe('https://cdn.jsdelivr.net/favicon.ico', { cache: 'no-store' });
+    results.httpbin         = await _probe('https://httpbin.org/get', { cache: 'no-store' });
+    results.githubApi       = await _probe('https://api.github.com/zen', { cache: 'no-store' });
+    results.supabaseHome    = await _probe('https://supabase.com/favicon.ico', { cache: 'no-store' });
+    results.jsdelivr        = await _probe('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/package.json', { cache: 'no-store' });
     results.supabaseRoot    = await _probe(SUPABASE_URL + '/rest/v1/', { cache: 'no-store' });
     results.supabaseAuthed  = await _probe(_restUrl, {
       cache: 'no-store',
