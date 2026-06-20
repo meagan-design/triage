@@ -10,7 +10,7 @@
   ========================================================== */
 
   const STORAGE_KEY = 'triage_board_v4';
-  const APP_VERSION = '20260620a';
+  const APP_VERSION = '20260620b';
 
   /* ----------------------------------------------------------
      SUPABASE CONFIG
@@ -1689,8 +1689,17 @@
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const diff  = Math.round((due - today) / 86400000);
     if (diff < 0)  return 'overdue';
-    if (diff <= 2) return 'due-soon';
-    return '';
+    if (diff <= 2) return 'soon';
+    return 'normal';
+  }
+
+  // Inline SVG icons for the due-date chip. Calendar for normal/soon,
+  // alert-circle for overdue so the urgency reads at a glance.
+  function dueChipIcon(cls) {
+    if (cls === 'overdue') {
+      return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><line x1="8" y1="4.8" x2="8" y2="8.6"/><circle cx="8" cy="11.4" r="0.5" fill="currentColor" stroke="none"/></svg>`;
+    }
+    return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="3.8" width="11" height="9.7" rx="1.3"/><line x1="2.5" y1="6.8" x2="13.5" y2="6.8"/><line x1="5.5" y1="2.2" x2="5.5" y2="4.8"/><line x1="10.5" y1="2.2" x2="10.5" y2="4.8"/></svg>`;
   }
 
   function groupBy(arr, key) {
@@ -1774,6 +1783,10 @@
       ? formatCompletedDate(item.completedAt || item.updatedAt)
       : '';
 
+    const dueChipHtml = dueDateStr
+      ? `<span class="due-chip due-chip--${dueCls || 'normal'}" title="${escapeHtml(dueDateStr)}">${dueChipIcon(dueCls)}<span class="due-chip-label">${escapeHtml(dueDateStr)}</span></span>`
+      : '';
+
     return `
       <article class="${cardCls}" data-id="${escapeHtml(item.id)}" draggable="true">
         <div class="card-main" role="button" tabindex="0" aria-expanded="${isExpanded}">
@@ -1781,6 +1794,7 @@
             <span class="drag-handle" title="Drag to reorder">&#x2807;</span>
             ${item.source === 'clickup' ? '<span class="source-badge">CU</span>' : ''}
             <h4 class="card-title">${escapeHtml(item.title)}</h4>
+            ${dueChipHtml}
           </div>
           ${item.nextStep ? `<div class="card-next-step" title="Next step">${escapeHtml(item.nextStep)}</div>` : ''}
           <div class="card-meta">
@@ -1789,7 +1803,6 @@
               : ''}
             ${workModeBadge(item.workMode)}
             ${stagePillHtml(item.stage)}
-            ${dueDateStr ? `<span class="due-date ${dueCls}">${escapeHtml(dueDateStr)}</span>` : ''}
             ${completedDateStr ? `<span class="completed-date-badge">${escapeHtml(completedDateStr)}</span>` : ''}
             ${item.clickupStatus ? `<span class="clickup-status-badge">${escapeHtml(item.clickupStatus)}</span>` : ''}
           </div>
