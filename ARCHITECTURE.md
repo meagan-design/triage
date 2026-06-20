@@ -274,6 +274,10 @@ A v1→v2 migration also exists (`migrateItem`) for items captured under the ori
 
 `setupVisibilityRefresh()` registers `visibilitychange` + `focus` listeners that call `refreshFromSupabase()` whenever the tab returns to the foreground. This guards against the realtime WebSocket being silently killed during mobile-Safari tab suspension. The refresh respects the dialog-open guard and short-circuits if remote state is byte-identical to local cache.
 
+### Fetch-direction trust guard (paired with the push guard)
+
+`shouldBlockFetchOverwrite(remoteData)` refuses to apply a Supabase payload (from `loadState`, `refreshFromSupabase`, or a realtime UPDATE event) when the local state has a `latestUpdatedAt` more than 60 seconds newer than the remote's. When blocked, the guard schedules a push to Supabase so the stale remote gets repaired. Prevents the canonical "Supabase paused, resumed serving an old snapshot, page refresh clobbered fresher local" failure mode that bit this project in June 2026. Surfaced in the diagnostic panel as `LAST FETCH > Overwrite blocked`.
+
 ### Sync state, push retry, and the diagnostic panel
 
 All sync facts are captured in a single `_sync` object — sync state, last fetch/push outcomes, realtime channel status, event counters, and snapshots of local + remote state.

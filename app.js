@@ -10,7 +10,7 @@
   ========================================================== */
 
   const STORAGE_KEY = 'triage_board_v4';
-  const APP_VERSION = '20260618h';
+  const APP_VERSION = '20260620a';
 
   /* ----------------------------------------------------------
      SUPABASE CONFIG
@@ -165,9 +165,30 @@
     };
   }
 
-  // Block auto-pushes when local state has not been verified against Supabase
-  // this session AND looks suspiciously stale. Prevents a phone holding seed
-  // data from overwriting real Supabase state once the network unblocks.
+  // Symmetric guard for the FETCH direction: refuse to overwrite local state
+  // with a Supabase payload that is older than what we already have. The
+  // canonical failure mode this prevents: paused-and-resumed Supabase project
+  // serves a stale snapshot, and a casual page refresh clobbers a newer
+  // localStorage with the stale snapshot. Returns null if the fetch is safe to
+  // apply, otherwise returns a human-readable reason.
+  const FETCH_OVERWRITE_GRACE_MS = 60_000;
+  function shouldBlockFetchOverwrite(remoteData) {
+    const remoteLatest = (_stateSummary(remoteData) || {}).latestUpdatedAt || 0;
+    const localLatest  = computeLocalLatestUpdatedAt();
+    if (!localLatest) return null;                       // no local data → safe to apply
+    if (localLatest <= remoteLatest + FETCH_OVERWRITE_GRACE_MS) return null;
+    const ageDays = Math.round((localLatest - remoteLatest) / 86400000);
+    return `Remote is ${ageDays}d older than local — refusing to overwrite. Pushing local up instead.`;
+  }
+
+  function computeLocalLatestUpdatedAt() {
+    let latest = 0;
+    for (const it of (state.items || [])) {
+      if (it && typeof it.updatedAt === 'number' && it.updatedAt > latest) latest = it.updatedAt;
+    }
+    return latest;
+  }
+
   function shouldBlockAutoPush() {
     if (_sync.lastFetchOk === true) return null;                  // fetched OK → trust local
     if (_sync.lastPushOk === true)  return null;                  // already pushed OK this session
@@ -350,6 +371,17 @@
           renderSyncIndicator();
           return;
         }
+        // Trust guard for the FETCH/realtime direction.
+        const blocked = shouldBlockFetchOverwrite(payload.new.data);
+        if (blocked) {
+          _sync.realtimeSkipped++;
+          _sync.fetchOverwriteBlocked = blocked;
+          console.warn('[triage] realtime event ignored:', blocked);
+          renderSyncIndicator();
+          scheduleSupabasePush(buildStateData());
+          return;
+        }
+        _sync.fetchOverwriteBlocked = null;
         restoreStateFromData(payload.new.data);
         applyMigrations();
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload.new.data)); } catch(e) {}
@@ -413,15 +445,16 @@
         parseError:     _sync.localParseError || null,
       },
       fetch: {
-        url:            _sync.lastFetchUrl,
-        lastAt:         _sync.lastFetchAt ? new Date(_sync.lastFetchAt).toISOString() : null,
-        ok:             _sync.lastFetchOk,
-        error:          _sync.lastFetchError,
-        errorType:      _sync.lastFetchErrorName,
-        items:          _sync.lastFetchSummary ? _sync.lastFetchSummary.items : null,
-        latestUpdated:  _sync.lastFetchSummary && _sync.lastFetchSummary.latestUpdatedAt
-                          ? new Date(_sync.lastFetchSummary.latestUpdatedAt).toISOString() : null,
-        bytes:          _sync.lastFetchSummary ? _sync.lastFetchSummary.bytes : null,
+        url:                 _sync.lastFetchUrl,
+        lastAt:              _sync.lastFetchAt ? new Date(_sync.lastFetchAt).toISOString() : null,
+        ok:                  _sync.lastFetchOk,
+        error:               _sync.lastFetchError,
+        errorType:           _sync.lastFetchErrorName,
+        items:               _sync.lastFetchSummary ? _sync.lastFetchSummary.items : null,
+        latestUpdated:       _sync.lastFetchSummary && _sync.lastFetchSummary.latestUpdatedAt
+                               ? new Date(_sync.lastFetchSummary.latestUpdatedAt).toISOString() : null,
+        bytes:               _sync.lastFetchSummary ? _sync.lastFetchSummary.bytes : null,
+        overwriteBlocked:    _sync.fetchOverwriteBlocked || null,
       },
       push: {
         lastAt:         _sync.lastPushAt ? new Date(_sync.lastPushAt).toISOString() : null,
@@ -513,14 +546,15 @@
         row('Parse error',        d.local.parseError),
       ])}
       ${section('LAST FETCH FROM SUPABASE', [
-        row('URL',             d.fetch.url),
-        row('At',              d.fetch.lastAt),
-        row('OK',              d.fetch.ok == null ? '—' : (d.fetch.ok ? 'yes' : 'NO')),
-        row('Error',           d.fetch.error),
-        row('Error type',      d.fetch.errorType),
-        row('Items',           d.fetch.items),
-        row('Latest updatedAt',d.fetch.latestUpdated),
-        row('Bytes',           d.fetch.bytes),
+        row('URL',                d.fetch.url),
+        row('At',                 d.fetch.lastAt),
+        row('OK',                 d.fetch.ok == null ? '—' : (d.fetch.ok ? 'yes' : 'NO')),
+        row('Error',              d.fetch.error),
+        row('Error type',         d.fetch.errorType),
+        row('Items',              d.fetch.items),
+        row('Latest updatedAt',   d.fetch.latestUpdated),
+        row('Bytes',              d.fetch.bytes),
+        row('Overwrite blocked',  d.fetch.overwriteBlocked),
       ])}
       ${section('LAST PUSH TO SUPABASE', [
         row('At',          d.push.lastAt),
@@ -769,15 +803,28 @@
           _sync.state              = 'error';
           console.warn('[triage] Supabase load returned error:', error);
         } else if (data?.data) {
-          restoreStateFromData(data.data);
-          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data.data)); } catch(e) {}
-          loadedFromSupabase = true;
-          _sync.lastFetchOk        = true;
-          _sync.lastFetchError     = null;
-          _sync.lastFetchErrorName = null;
-          _sync.lastFetchSummary   = _stateSummary(data.data);
-          _sync.state              = 'synced';
-          console.info('[triage] Loaded state from Supabase:', _sync.lastFetchSummary);
+          _sync.lastFetchSummary = _stateSummary(data.data);
+          const blocked = shouldBlockFetchOverwrite(data.data);
+          if (blocked) {
+            _sync.lastFetchOk             = true;
+            _sync.lastFetchError          = null;
+            _sync.lastFetchErrorName      = null;
+            _sync.fetchOverwriteBlocked   = blocked;
+            _sync.state                   = 'synced';
+            console.warn('[triage] Fetch ignored:', blocked);
+            // Push local up to Supabase to repair the stale remote.
+            scheduleSupabasePush(buildStateData());
+          } else {
+            restoreStateFromData(data.data);
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data.data)); } catch(e) {}
+            loadedFromSupabase = true;
+            _sync.lastFetchOk             = true;
+            _sync.lastFetchError          = null;
+            _sync.lastFetchErrorName      = null;
+            _sync.fetchOverwriteBlocked   = null;
+            _sync.state                   = 'synced';
+            console.info('[triage] Loaded state from Supabase:', _sync.lastFetchSummary);
+          }
         } else {
           _sync.lastFetchOk        = false;
           _sync.lastFetchError     = 'Supabase returned no row for id=main';
@@ -869,6 +916,17 @@
         if (manual) showToast('Already up to date', 1800);
         return true;
       }
+      // Trust guard for the FETCH direction.
+      const blocked = shouldBlockFetchOverwrite(data.data);
+      if (blocked) {
+        _sync.fetchOverwriteBlocked = blocked;
+        renderSyncIndicator();
+        console.warn('[triage] Refresh ignored:', blocked);
+        scheduleSupabasePush(buildStateData());
+        if (manual) showToast('Local is newer — pushing up instead', 2500);
+        return false;
+      }
+      _sync.fetchOverwriteBlocked = null;
       restoreStateFromData(data.data);
       try { localStorage.setItem(STORAGE_KEY, remoteJson); } catch(e) {}
       applyMigrations();
