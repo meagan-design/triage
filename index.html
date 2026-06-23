@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260620b">
+  <link rel="stylesheet" href="styles.css?v=20260620c">
 </head>
 <body class="app-locked">
 
@@ -31,6 +31,7 @@
       <a href="#tabled-initiatives" class="nav-item nav-item--tabled"    data-section="tabled-initiatives"    id="nav-tabled"    hidden>Tabled <span class="nav-badge" id="badge-tabled"></span></a>
       <a href="#completed-initiatives" class="nav-item nav-item--completed" data-section="completed-initiatives" id="nav-completed-init" hidden>Completed Init. <span class="nav-badge" id="badge-completed-init"></span></a>
       <a href="#completed-items"    class="nav-item" data-section="completed-items">Completed <span class="nav-badge" id="badge-completed-items"></span></a>
+      <a href="#distractions"       class="nav-item" data-section="distractions">Distractions <span class="nav-badge" id="badge-distractions"></span></a>
       <a href="#weekly-review"      class="nav-item" data-section="weekly-review">Weekly Review</a>
     </nav>
 
@@ -203,6 +204,16 @@
       <div class="card-list" id="cards-archived-items"></div>
     </section>
 
+    <section id="distractions" class="lane lane--distractions" data-lane="distractions">
+      <header class="lane-header">
+        <div class="lane-header-left"><h2>Distractions</h2><span class="lane-count" id="count-distractions"></span></div>
+        <button class="distraction-add-btn" data-action="log-distraction" type="button">+ Log distraction</button>
+      </header>
+      <p class="lane-description">Unplanned asks, fire drills, and interruptions that displaced planned work. Logged, not judged.</p>
+      <div class="distraction-stats" id="distraction-stats"></div>
+      <div id="cards-distractions" class="distraction-list"></div>
+    </section>
+
     <section id="weekly-review" class="lane lane--review" data-lane="weekly-review">
       <header class="lane-header">
         <div class="lane-header-left"><h2>Weekly Review</h2></div>
@@ -323,6 +334,104 @@
     </form>
   </dialog>
 
+  <!-- Distraction Modal -->
+  <dialog id="distraction-modal">
+    <div class="modal-header">
+      <h3 id="distraction-modal-title">Log a distraction</h3>
+      <button id="distraction-close-btn" class="modal-close-btn" type="button" aria-label="Close">&times;</button>
+    </div>
+    <form id="distraction-form" novalidate>
+      <input type="hidden" name="id" id="distraction-id">
+
+      <div class="form-group form-group--full">
+        <input type="text" name="title" id="distraction-title" placeholder="What happened?" required autocomplete="off">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="distraction-date">Date</label>
+          <input type="date" name="date" id="distraction-date" required>
+        </div>
+        <div class="form-group">
+          <label for="distraction-source-person">Source / Who</label>
+          <input type="text" name="sourcePerson" id="distraction-source-person" placeholder="Lincoln, Kyle, customer, self…" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="distraction-category">Category</label>
+          <input type="text" name="category" id="distraction-category" list="distraction-categories-list" placeholder="fire-drill, unplanned-ask, process-breakdown…" autocomplete="off">
+          <datalist id="distraction-categories-list">
+            <option value="fire-drill"></option>
+            <option value="unplanned-ask"></option>
+            <option value="process-breakdown"></option>
+            <option value="meeting-overrun"></option>
+            <option value="tech-issue"></option>
+            <option value="admin-overflow"></option>
+            <option value="customer-escalation"></option>
+            <option value="other"></option>
+          </datalist>
+        </div>
+        <div class="form-group">
+          <label for="distraction-initiative">Initiative impacted</label>
+          <input type="text" name="initiativeImpacted" id="distraction-initiative" list="distraction-initiatives-list" placeholder="(optional)" autocomplete="off">
+          <datalist id="distraction-initiatives-list"></datalist>
+        </div>
+      </div>
+
+      <div class="form-group form-group--full">
+        <label for="distraction-displaced">Planned work displaced</label>
+        <input type="text" name="plannedWorkDisplaced" id="distraction-displaced" placeholder="Entity structuring deep work, drafting EU brief…" autocomplete="off">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="distraction-minutes">Time absorbed (minutes)</label>
+          <input type="number" name="estimatedMinutes" id="distraction-minutes" min="0" step="5" placeholder="60" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="distraction-delegable">Delegable?</label>
+          <select name="delegable" id="distraction-delegable">
+            <option value="">—</option>
+            <option value="yes">Yes</option>
+            <option value="maybe">Maybe</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group form-group--full">
+        <label for="distraction-root-cause">Root cause</label>
+        <input type="text" name="rootCause" id="distraction-root-cause" list="distraction-root-causes-list" placeholder="no delegate, missing process, unclear priorities…" autocomplete="off">
+        <datalist id="distraction-root-causes-list">
+          <option value="unclear-process"></option>
+          <option value="missing-tool"></option>
+          <option value="no-delegate"></option>
+          <option value="external-dependency"></option>
+          <option value="unclear-prioritization"></option>
+          <option value="interruption-culture"></option>
+          <option value="other"></option>
+        </datalist>
+      </div>
+
+      <div class="form-group form-group--full">
+        <label for="distraction-summary">Summary</label>
+        <textarea name="summary" id="distraction-summary" rows="2" placeholder="Short description of the interruption…"></textarea>
+      </div>
+
+      <div class="form-group form-group--full">
+        <label for="distraction-notes">Notes</label>
+        <textarea name="notes" id="distraction-notes" rows="2" placeholder="Context, links, follow-ups…"></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-primary" id="distraction-submit-btn">Log it</button>
+        <button type="button" id="distraction-cancel-btn" class="btn-secondary">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Initiative Detail Modal -->
   <dialog id="initiative-detail-modal">
     <div class="init-detail-header">
@@ -393,6 +502,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="app.js?v=20260620b"></script>
+  <script src="app.js?v=20260620c"></script>
 </body>
 </html>

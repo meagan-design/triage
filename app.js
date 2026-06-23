@@ -10,7 +10,7 @@
   ========================================================== */
 
   const STORAGE_KEY = 'triage_board_v4';
-  const APP_VERSION = '20260620b';
+  const APP_VERSION = '20260620c';
 
   /* ----------------------------------------------------------
      SUPABASE CONFIG
@@ -106,10 +106,11 @@
     completedInitiatives: [],
     deletedInitiatives:   [],
     customInitiatives:    [],
+    distractions:         [],
     filter:               { initiative: null },
     completedFilter:      { initiative: null, period: 'all' },
     activeItemId:         null,
-    ui:                   { editingItemId: null },
+    ui:                   { editingItemId: null, editingDistractionId: null },
   };
 
   /* ==========================================================
@@ -186,6 +187,9 @@
     for (const it of (state.items || [])) {
       if (it && typeof it.updatedAt === 'number' && it.updatedAt > latest) latest = it.updatedAt;
     }
+    for (const d of (state.distractions || [])) {
+      if (d && typeof d.updatedAt === 'number' && d.updatedAt > latest) latest = d.updatedAt;
+    }
     return latest;
   }
 
@@ -208,6 +212,10 @@
     let latest = 0;
     for (const it of data.items) {
       if (it && typeof it.updatedAt === 'number' && it.updatedAt > latest) latest = it.updatedAt;
+    }
+    const distractions = Array.isArray(data.distractions) ? data.distractions : [];
+    for (const d of distractions) {
+      if (d && typeof d.updatedAt === 'number' && d.updatedAt > latest) latest = d.updatedAt;
     }
     let bytes = 0;
     try { bytes = JSON.stringify(data).length; } catch (e) {}
@@ -726,6 +734,7 @@
       completedInitiatives: state.completedInitiatives,
       deletedInitiatives:   state.deletedInitiatives,
       customInitiatives:    state.customInitiatives,
+      distractions:         state.distractions,
     };
   }
 
@@ -735,6 +744,7 @@
     state.completedInitiatives = data.completedInitiatives || [];
     state.deletedInitiatives   = data.deletedInitiatives   || [];
     state.customInitiatives    = data.customInitiatives    || [];
+    state.distractions         = data.distractions         || [];
   }
 
   function saveState() {
@@ -1003,16 +1013,20 @@
         if (!data.items || !Array.isArray(data.items)) {
           showToast('Invalid file — not a Triage Board export'); return;
         }
-        if (!confirm(`Import ${data.items.length} items from ${data.exportedAt || 'this file'}?\n\nThis will replace your current data.`)) return;
+        const dCount = Array.isArray(data.distractions) ? data.distractions.length : 0;
+        const dText = dCount ? ` and ${dCount} distractions` : '';
+        if (!confirm(`Import ${data.items.length} items${dText} from ${data.exportedAt || 'this file'}?\n\nThis will replace your current data.`)) return;
         state.items                = data.items;
         state.tabledInitiatives    = data.tabledInitiatives    || [];
         state.completedInitiatives = data.completedInitiatives || [];
         state.deletedInitiatives   = data.deletedInitiatives   || [];
+        state.customInitiatives    = data.customInitiatives    || [];
+        state.distractions         = data.distractions         || [];
         state.filter.initiative    = null;
         state.activeItemId         = null;
         saveState();
         render();
-        showToast(`Imported ${data.items.length} items ✓`, 3500);
+        showToast(`Imported ${data.items.length} items${dText} ✓`, 3500);
       } catch (err) {
         showToast('Could not read file — make sure it is a valid Triage Board JSON export');
         console.error('JSON import error:', err);
@@ -1125,6 +1139,68 @@
     state.items.unshift(item);
     saveState();
     render();
+  }
+
+  /* --- Distractions (lightweight unplanned-load log) --- */
+
+  function getWeekKey(dateStr) {
+    // Returns 'YYYY-MM-DD' of Monday of the week containing dateStr.
+    const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+    if (isNaN(d.getTime())) return '';
+    const monday = getWeekStart(d);
+    const y = monday.getFullYear();
+    const m = String(monday.getMonth() + 1).padStart(2, '0');
+    const day = String(monday.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function createDistraction(overrides = {}) {
+    const today = new Date();
+    const ymd = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    const base = {
+      id:                   crypto.randomUUID(),
+      date:                 ymd,
+      title:                '',
+      summary:              '',
+      sourcePerson:         '',
+      category:             '',
+      initiativeImpacted:   null,
+      plannedWorkDisplaced: '',
+      estimatedMinutes:     null,
+      delegable:            null,
+      rootCause:            '',
+      notes:                '',
+      createdAt:            Date.now(),
+      updatedAt:            Date.now(),
+      ...overrides,
+    };
+    base.weekKey = getWeekKey(base.date);
+    return base;
+  }
+
+  function addDistraction(d) {
+    state.distractions.unshift(d);
+    saveState();
+    render();
+  }
+
+  function updateDistraction(id, changes) {
+    const idx = state.distractions.findIndex(d => d.id === id);
+    if (idx === -1) return;
+    const merged = { ...state.distractions[idx], ...changes, updatedAt: Date.now() };
+    // Re-derive weekKey if date changed
+    if (changes.date) merged.weekKey = getWeekKey(merged.date);
+    state.distractions[idx] = merged;
+    saveState();
+    render();
+  }
+
+  function deleteDistraction(id) {
+    if (!confirm('Delete this distraction log entry? This cannot be undone.')) return;
+    state.distractions = state.distractions.filter(d => d.id !== id);
+    saveState();
+    render();
+    showToast('Distraction deleted');
   }
 
   /* --- Initiative Lifecycle --- */
@@ -1898,6 +1974,7 @@
     renderTabledInitiatives();
     renderCompletedInitiatives();
     renderCompletedItems();
+    renderDistractions();
     renderWeeklyReview();
     // Keep detail modal live if it's open
     const detailModal = document.getElementById('initiative-detail-modal');
@@ -2199,6 +2276,217 @@
       : '<p class="lane-empty">No completed items match the current filter</p>';
   }
 
+  /* ==========================================================
+     8b. DISTRACTIONS RENDERER
+  ========================================================== */
+
+  function formatMinutesAsHours(mins) {
+    if (!mins || mins <= 0) return '0h';
+    const h = mins / 60;
+    return (h >= 10 ? Math.round(h) : Math.round(h * 10) / 10) + 'h';
+  }
+
+  function formatDelegable(v) {
+    if (v === 'yes')   return 'Delegable: yes';
+    if (v === 'maybe') return 'Delegable: maybe';
+    if (v === 'no')    return 'Delegable: no';
+    return '';
+  }
+
+  function formatWeekRange(weekKey) {
+    if (!weekKey) return '';
+    const monday = new Date(weekKey + 'T00:00:00');
+    if (isNaN(monday.getTime())) return weekKey;
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    const fmt = d => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d);
+    return `Week of ${fmt(monday)} – ${fmt(sunday)}`;
+  }
+
+  function renderDistractionCard(d) {
+    const meta = [];
+    if (d.sourcePerson)         meta.push(`<span class="distraction-meta-pill distraction-meta-pill--person">${escapeHtml(d.sourcePerson)}</span>`);
+    if (d.category)             meta.push(`<span class="distraction-meta-pill">${escapeHtml(d.category)}</span>`);
+    if (d.initiativeImpacted)   meta.push(`<span class="distraction-meta-pill distraction-meta-pill--initiative">${escapeHtml(d.initiativeImpacted)}</span>`);
+    if (d.estimatedMinutes)     meta.push(`<span class="distraction-meta-pill distraction-meta-pill--time">${escapeHtml(formatMinutesAsHours(d.estimatedMinutes))}</span>`);
+    const delegableLabel = formatDelegable(d.delegable);
+    if (delegableLabel)         meta.push(`<span class="distraction-meta-pill distraction-meta-pill--${d.delegable}">${escapeHtml(delegableLabel)}</span>`);
+
+    const detail = [];
+    if (d.plannedWorkDisplaced) detail.push(`<div class="distraction-detail-row"><span class="distraction-detail-label">Displaced</span> ${escapeHtml(d.plannedWorkDisplaced)}</div>`);
+    if (d.rootCause)            detail.push(`<div class="distraction-detail-row"><span class="distraction-detail-label">Root cause</span> ${escapeHtml(d.rootCause)}</div>`);
+    if (d.summary)              detail.push(`<div class="distraction-detail-row"><span class="distraction-detail-label">Summary</span> ${escapeHtml(d.summary)}</div>`);
+    if (d.notes)                detail.push(`<div class="distraction-detail-row"><span class="distraction-detail-label">Notes</span> ${escapeHtml(d.notes)}</div>`);
+
+    return `
+      <article class="distraction-card" data-distraction-id="${escapeHtml(d.id)}">
+        <header class="distraction-card-header">
+          <div class="distraction-card-title-row">
+            <span class="distraction-card-date">${escapeHtml(d.date || '')}</span>
+            <h4 class="distraction-card-title">${escapeHtml(d.title || '(untitled)')}</h4>
+          </div>
+          <div class="distraction-card-actions">
+            <button type="button" class="distraction-edit-btn"   data-distraction-id="${escapeHtml(d.id)}" data-action="edit-distraction">Edit</button>
+            <button type="button" class="distraction-delete-btn" data-distraction-id="${escapeHtml(d.id)}" data-action="delete-distraction">Delete</button>
+          </div>
+        </header>
+        ${meta.length ? `<div class="distraction-card-meta">${meta.join('')}</div>` : ''}
+        ${detail.length ? `<div class="distraction-card-detail">${detail.join('')}</div>` : ''}
+      </article>`;
+  }
+
+  function renderDistractions() {
+    const container = document.getElementById('cards-distractions');
+    const statsEl   = document.getElementById('distraction-stats');
+    const countEl   = document.getElementById('count-distractions');
+    const navBadge  = document.getElementById('badge-distractions');
+    if (!container) return;
+
+    const all = (state.distractions || []).slice().sort((a, b) => {
+      // sort by date desc, then createdAt desc
+      const da = a.date || ''; const db = b.date || '';
+      if (da !== db) return db.localeCompare(da);
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+
+    const thisWeekKey = getWeekKey(new Date().toISOString().slice(0,10));
+    const thisWeek = all.filter(d => d.weekKey === thisWeekKey);
+    const minsThisWeek = thisWeek.reduce((sum, d) => sum + (Number(d.estimatedMinutes) || 0), 0);
+
+    if (countEl)  countEl.textContent  = thisWeek.length > 0 ? thisWeek.length : '';
+    if (navBadge) navBadge.textContent = thisWeek.length > 0 ? thisWeek.length : '';
+
+    if (statsEl) {
+      statsEl.innerHTML = `
+        <span class="distraction-stat"><span class="distraction-stat-value">${thisWeek.length}</span> this week</span>
+        <span class="distraction-stat-divider">·</span>
+        <span class="distraction-stat"><span class="distraction-stat-value">${formatMinutesAsHours(minsThisWeek)}</span> logged</span>
+      `;
+    }
+
+    if (!all.length) {
+      container.innerHTML = '<p class="lane-empty">Nothing logged yet. Use "+ Log distraction" when something unplanned absorbs your time.</p>';
+      return;
+    }
+
+    // Group by weekKey, preserving date-desc order
+    const groups = [];
+    const seen = new Map();
+    for (const d of all) {
+      const key = d.weekKey || 'unknown';
+      let g = seen.get(key);
+      if (!g) { g = { key, items: [] }; seen.set(key, g); groups.push(g); }
+      g.items.push(d);
+    }
+
+    container.innerHTML = groups.map(g => {
+      const isCurrent = g.key === thisWeekKey;
+      const groupMins = g.items.reduce((s, d) => s + (Number(d.estimatedMinutes) || 0), 0);
+      const headerLabel = `${formatWeekRange(g.key)} · ${g.items.length} · ${formatMinutesAsHours(groupMins)}`;
+      return `
+        <details class="distraction-week-group" ${isCurrent ? 'open' : ''}>
+          <summary class="distraction-week-header">${escapeHtml(headerLabel)}${isCurrent ? ' <span class="distraction-week-tag">this week</span>' : ''}</summary>
+          <div class="distraction-week-items">${g.items.map(renderDistractionCard).join('')}</div>
+        </details>`;
+    }).join('');
+  }
+
+  function countDistractionsThisWeek() {
+    const thisWeekKey = getWeekKey(new Date().toISOString().slice(0,10));
+    return (state.distractions || []).filter(d => d.weekKey === thisWeekKey).length;
+  }
+
+  /* ==========================================================
+     8c. DISTRACTION MODAL
+  ========================================================== */
+
+  function openDistractionModal(prefill = {}) {
+    const dialog = document.getElementById('distraction-modal');
+    const form   = document.getElementById('distraction-form');
+    const title  = document.getElementById('distraction-modal-title');
+    const submit = document.getElementById('distraction-submit-btn');
+    if (!dialog || !form) return;
+
+    populateDistractionInitiatives();
+    form.reset();
+
+    if (prefill.id) {
+      const d = state.distractions.find(x => x.id === prefill.id);
+      if (!d) return;
+      state.ui.editingDistractionId = d.id;
+      if (title) title.textContent  = 'Edit distraction';
+      if (submit) submit.textContent = 'Save changes';
+
+      document.getElementById('distraction-id').value                  = d.id;
+      document.getElementById('distraction-date').value                = d.date || '';
+      document.getElementById('distraction-title').value               = d.title || '';
+      document.getElementById('distraction-source-person').value       = d.sourcePerson || '';
+      document.getElementById('distraction-category').value            = d.category || '';
+      document.getElementById('distraction-initiative').value          = d.initiativeImpacted || '';
+      document.getElementById('distraction-displaced').value           = d.plannedWorkDisplaced || '';
+      document.getElementById('distraction-minutes').value             = (d.estimatedMinutes != null ? d.estimatedMinutes : '');
+      document.getElementById('distraction-delegable').value           = d.delegable || '';
+      document.getElementById('distraction-root-cause').value          = d.rootCause || '';
+      document.getElementById('distraction-summary').value             = d.summary || '';
+      document.getElementById('distraction-notes').value               = d.notes || '';
+    } else {
+      state.ui.editingDistractionId = null;
+      if (title) title.textContent  = 'Log a distraction';
+      if (submit) submit.textContent = 'Log it';
+      const today = new Date();
+      const ymd = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+      document.getElementById('distraction-date').value = ymd;
+    }
+
+    dialog.showModal();
+    setTimeout(() => document.getElementById('distraction-title').focus(), 60);
+  }
+
+  function closeDistractionModal() {
+    const dialog = document.getElementById('distraction-modal');
+    if (dialog && dialog.open) dialog.close();
+    state.ui.editingDistractionId = null;
+  }
+
+  function populateDistractionInitiatives() {
+    const dl = document.getElementById('distraction-initiatives-list');
+    if (!dl) return;
+    dl.innerHTML = getAllInitiatives()
+      .map(i => `<option value="${escapeHtml(i)}"></option>`).join('');
+  }
+
+  function handleDistractionSubmit(e) {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    const title = (data.get('title') || '').trim();
+    if (!title) { document.getElementById('distraction-title').focus(); return; }
+
+    const minutesRaw = (data.get('estimatedMinutes') || '').toString().trim();
+    const minutes = minutesRaw === '' ? null : Math.max(0, Math.round(Number(minutesRaw))) || null;
+
+    const values = {
+      date:                 data.get('date') || '',
+      title,
+      sourcePerson:         (data.get('sourcePerson')         || '').trim(),
+      category:             (data.get('category')             || '').trim(),
+      initiativeImpacted:   ((data.get('initiativeImpacted')  || '').trim()) || null,
+      plannedWorkDisplaced: (data.get('plannedWorkDisplaced') || '').trim(),
+      estimatedMinutes:     minutes,
+      delegable:            (data.get('delegable') || '') || null,
+      rootCause:            (data.get('rootCause')  || '').trim(),
+      summary:              (data.get('summary')    || '').trim(),
+      notes:                (data.get('notes')      || '').trim(),
+    };
+
+    if (state.ui.editingDistractionId) {
+      updateDistraction(state.ui.editingDistractionId, values);
+      showToast('Distraction updated');
+    } else {
+      addDistraction(createDistraction(values));
+      showToast('Distraction logged');
+    }
+    closeDistractionModal();
+  }
+
   function renderSidebar() {
     const wl = document.getElementById('week-label');
     if (wl) wl.textContent = formatWeekLabel(new Date());
@@ -2308,6 +2596,10 @@
       <div class="review-stat-card">
         <div class="review-stat-label">Needs Placement</div>
         <div class="review-stat-value">${needsPlacement.length}</div>
+      </div>
+      <div class="review-stat-card">
+        <div class="review-stat-label">Distractions This Week</div>
+        <div class="review-stat-value">${countDistractionsThisWeek()}</div>
       </div>`;
   }
 
@@ -3128,6 +3420,35 @@
     document.getElementById('modal-close-btn').addEventListener('click', closeCaptureModal);
     document.getElementById('modal-cancel-btn').addEventListener('click', closeCaptureModal);
 
+    /* --- Distraction modal + section actions --- */
+    const dForm = document.getElementById('distraction-form');
+    if (dForm) dForm.addEventListener('submit', handleDistractionSubmit);
+    const dCloseBtn = document.getElementById('distraction-close-btn');
+    if (dCloseBtn) dCloseBtn.addEventListener('click', closeDistractionModal);
+    const dCancelBtn = document.getElementById('distraction-cancel-btn');
+    if (dCancelBtn) dCancelBtn.addEventListener('click', closeDistractionModal);
+    const dDialog = document.getElementById('distraction-modal');
+    if (dDialog) {
+      dDialog.addEventListener('click', e => {
+        const rect = dDialog.getBoundingClientRect();
+        const outside = e.clientX < rect.left || e.clientX > rect.right ||
+                        e.clientY < rect.top  || e.clientY > rect.bottom;
+        if (outside) closeDistractionModal();
+      });
+    }
+    document.body.addEventListener('click', e => {
+      const addBtn = e.target.closest('[data-action="log-distraction"]');
+      if (addBtn) { e.stopPropagation(); openDistractionModal(); return; }
+      const editBtn = e.target.closest('[data-action="edit-distraction"]');
+      if (editBtn && editBtn.dataset.distractionId) {
+        e.stopPropagation(); openDistractionModal({ id: editBtn.dataset.distractionId }); return;
+      }
+      const delBtn = e.target.closest('[data-action="delete-distraction"]');
+      if (delBtn && delBtn.dataset.distractionId) {
+        e.stopPropagation(); deleteDistraction(delBtn.dataset.distractionId); return;
+      }
+    });
+
     /* --- Initiative detail modal --- */
     document.getElementById('init-detail-close-btn').addEventListener('click', closeInitiativeDetail);
     document.getElementById('initiative-detail-modal').addEventListener('click', e => {
@@ -3217,6 +3538,8 @@
         e.preventDefault(); openCaptureModal(); return;
       }
       if (e.key === 'Escape') {
+        const distractionDialog = document.getElementById('distraction-modal');
+        if (distractionDialog && distractionDialog.open) { closeDistractionModal(); return; }
         const detail = document.getElementById('initiative-detail-modal');
         if (detail.open) { closeInitiativeDetail(); return; }
         const d = document.getElementById('capture-modal');

@@ -545,6 +545,259 @@ body {
 /* Completed Items */
 .lane--completed-items .lane-header h2 { color: var(--color-text-secondary); }
 
+/* Distractions — slate-blue heading, soft tinted section */
+.lane--distractions .lane-header h2 { color: var(--color-import-progress); }
+
+.distraction-add-btn {
+  font-size: 0.73rem;
+  color: var(--color-import-progress);
+  background: var(--color-import-progress-light);
+  border: 1px solid rgba(61,90,128,0.2);
+  border-radius: var(--radius-sm);
+  padding: 4px 12px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  transition: background 120ms, border-color 120ms;
+}
+.distraction-add-btn:hover {
+  background: #dde5f0;
+  border-color: rgba(61,90,128,0.36);
+}
+
+.distraction-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-md);
+}
+.distraction-stat-value {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.distraction-stat-divider { color: var(--color-text-muted); }
+
+.distraction-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.distraction-week-group {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.distraction-week-header {
+  cursor: pointer;
+  padding: 10px var(--space-md);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  list-style: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.distraction-week-header::-webkit-details-marker { display: none; }
+.distraction-week-header::before {
+  content: '▸';
+  color: var(--color-text-muted);
+  transition: transform 120ms;
+}
+.distraction-week-group[open] > .distraction-week-header::before { transform: rotate(90deg); }
+.distraction-week-group:not([open]) > .distraction-week-header { border-bottom: none; }
+
+.distraction-week-tag {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-import-progress);
+  background: var(--color-import-progress-light);
+  padding: 1px 7px;
+  border-radius: 10px;
+  margin-left: 4px;
+}
+
+.distraction-week-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--color-border-subtle);
+}
+
+.distraction-card {
+  background: var(--color-surface);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.distraction-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.distraction-card-title-row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+.distraction-card-date {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+.distraction-card-title {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: 1.35;
+}
+
+.distraction-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.distraction-card:hover .distraction-card-actions { opacity: 1; }
+.distraction-edit-btn,
+.distraction-delete-btn {
+  font-size: 0.68rem;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+.distraction-edit-btn:hover {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.distraction-delete-btn:hover {
+  background: #fdf0ee;
+  color: #c0614a;
+  border-color: #e8c4bc;
+}
+
+.distraction-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+.distraction-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.65rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.distraction-meta-pill--person {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  border-color: rgba(139,116,144,0.3);
+}
+.distraction-meta-pill--initiative {
+  background: var(--color-import-progress-light);
+  color: var(--color-import-progress);
+  border-color: rgba(61,90,128,0.22);
+}
+.distraction-meta-pill--time {
+  background: var(--color-open-loop-light);
+  color: var(--color-open-loop);
+  border-color: var(--color-open-loop-border);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+.distraction-meta-pill--yes,
+.distraction-meta-pill--maybe,
+.distraction-meta-pill--no {
+  background: var(--color-completed-light);
+  color: var(--color-completed);
+  border-color: var(--color-completed-border);
+}
+.distraction-meta-pill--no {
+  background: #fbe8e6;
+  color: #b13a30;
+  border-color: #ecbbb4;
+}
+.distraction-meta-pill--maybe {
+  background: var(--color-accent-warm-light);
+  color: var(--color-accent-warm);
+  border-color: rgba(154,107,92,0.32);
+}
+
+.distraction-card-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: var(--space-sm) 0 0;
+  border-top: 1px dashed var(--color-border-subtle);
+}
+.distraction-detail-row {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+.distraction-detail-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-muted);
+  margin-right: 6px;
+}
+
+/* Distraction modal — reuse capture-modal sizing & header conventions */
+dialog#distraction-modal {
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  padding: 0;
+  width: min(620px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--color-surface);
+}
+dialog#distraction-modal::backdrop {
+  background: rgba(28,22,18,0.45);
+  backdrop-filter: blur(3px);
+}
+dialog#distraction-modal #distraction-form {
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
 /* Weekly Review */
 .lane--review {
   background: var(--color-surface);

@@ -95,6 +95,7 @@ Order shown in the sidebar nav (and roughly the page):
 | This Month              | `this-month`           | Slightly farther horizon |
 | Strategic Radar         | `strategic-radar`      | Active initiatives — grouped by initiative inside the lane |
 | Delegate                | `delegate`             | Items handed off to someone else — you still track progress |
+| Distractions            | `distractions` (special) | Standalone subsystem for unplanned-load logs — not a lane; see Distractions section below |
 | Waiting / Blocked       | `waiting`              | Anything blocked by a person, dependency, or external event |
 | Tabled Items            | `tabled-items`         | Individual items set aside (distinct from a whole tabled initiative) |
 | Tabled Initiatives      | `tabled-initiatives`   | Section that appears only if any initiatives are tabled |
@@ -273,6 +274,54 @@ A v1→v2 migration also exists (`migrateItem`) for items captured under the ori
 ### Visibility-based refresh
 
 `setupVisibilityRefresh()` registers `visibilitychange` + `focus` listeners that call `refreshFromSupabase()` whenever the tab returns to the foreground. This guards against the realtime WebSocket being silently killed during mobile-Safari tab suspension. The refresh respects the dialog-open guard and short-circuits if remote state is byte-identical to local cache.
+
+## Distractions (separate subsystem from items)
+
+A lightweight log of unplanned asks, fire drills, and interruptions that displaced planned work. **Not a lane.** Distractions live in their own top-level state array, render in their own section, have their own modal, and never mix with item triage. The point is to make unplanned load visible without dragging it into the task system.
+
+### State
+
+```js
+state.distractions = [
+  {
+    id, date, weekKey,                 // weekKey = Monday of the week, derived from date
+    title, summary, sourcePerson,
+    category, initiativeImpacted,      // soft string reference (no FK)
+    plannedWorkDisplaced,
+    estimatedMinutes, delegable,        // 'yes' | 'maybe' | 'no' | null
+    rootCause, notes,
+    createdAt, updatedAt,
+  }
+]
+```
+
+### Persistence
+
+- `buildStateData` and `restoreStateFromData` include `distractions`.
+- `handleJSONImport` reads `data.distractions || []`.
+- No migration needed for existing saves — missing `distractions` loads as `[]`.
+
+### Trust guards
+
+`_stateSummary` and `computeLocalLatestUpdatedAt` scan both `state.items` and `state.distractions` for the latest `updatedAt`. The fetch-direction trust guard (`shouldBlockFetchOverwrite`) therefore protects distraction edits the same way it protects item edits.
+
+### UI
+
+- `<section id="distractions">` is placed between Completed Items and Weekly Review in `index.html`. Sidebar nav entry "Distractions" between Completed and Weekly Review.
+- Cards group by week via `<details>`; current week is open by default.
+- Add/edit handled by `<dialog id="distraction-modal">` with a focused form (title, date, source, category, initiative impacted, planned work displaced, estimated minutes, delegable, root cause, summary, notes). Free-text fields with optional datalist suggestions — nothing enforced.
+- Each card shows title, date, and a compact metadata row (person · category · initiative · time · delegable). Optional detail block for displaced/root-cause/summary/notes.
+
+### Weekly Review
+
+One additional stat card: "Distractions This Week" with the count. The Distractions section also shows its own inline header: `N this week · Yh logged`. The text report (`generateWeeklyReport`) is unchanged in Phase 1.
+
+### What's intentionally not built (Phase 2 candidates)
+
+- Distraction lines in the generated text weekly report
+- Filters by person / category / delegable / root cause
+- CSV export
+- Synthesis around recurring process breakdowns / delegation opportunities
 
 ### Fetch-direction trust guard (paired with the push guard)
 
